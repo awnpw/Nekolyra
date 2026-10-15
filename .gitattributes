@@ -1,0 +1,38 @@
+# 统一换行符，避免 Windows/Linux 来回改动的噪音
+* text=auto
+
+# 源码按平台原生换行
+*.py   text
+*.ps1  text
+*.md   text
+*.txt  text
+*.json text
+*.yml  text
+*.yaml text
+
+# 二进制，别动
+*.ico  binary
+*.png  binary
+*.jpg  binary
+*.zip  binary
+*.db   binary
+
+# .ps1 是给 Windows 用户准备的辅助脚本（装 IndexTTS 运行时之类），
+# 不是这个项目的一部分，**别算进语言统计**。
+# （以前这里写的是 linguist-language=PowerShell —— 那条是"强制标记成
+#   PowerShell"，正好把语言栏里那 1.4% 造出来了。）
+*.ps1  linguist-detectable=false
+
+# 文档和截图不进语言统计。
+# （GitHub 对 .md 和图片本来就默认不计，这里写出来是把意图固定住，
+#   免得以后有人手滑改成 linguist-language=xxx。）
+docs/screenshots/**  linguist-documentation
+*.md                 linguist-documentation
+
+# ★ 前端拆成真文件之后（`nekolyra/web/static/` 下的 .html / .css / .js），
+#   **不要**给它们加任何 linguist-* 规则 —— 让 GitHub 按默认规则正常统计，
+#   语言栏才会显示出 HTML / CSS / JavaScript。
+#
+#   背景：以前整个管理台写在 bot.py 的 Python 字符串里（ADMIN_HTML + 12 个
+#   CSS 常量），GitHub 只看得见两个 .py 文件，所以语言栏是
+#   "Python 99.9% · Dockerfile 0.1%"。不是统计错了，是前端当时不以文件形式存在。

@@ -1,0 +1,26 @@
+{
+  "name": "gamefiles",
+  "display_name": "游戏库",
+  "version": "1.0.0",
+  "author": "Nekolyra",
+  "description": "扫群文件建索引，用 AI 把乱糟糟的文件名整理成游戏名。群员问「有没有XX」就自动把文件链接发出来。",
+  "entry": "main.py",
+  "tags": [
+    "工具",
+    "群文件"
+  ],
+  "defaults": {
+    "gf_scan_folders": "游戏,游戏库,games,单机游戏",
+    "gf_ai_enabled": true,
+    "gf_ai_batch": 30,
+    "gf_ai_max_calls": 6,
+    "gf_ask_words": "有没有,有木有,求,谁有,在哪,找一下,来个,想要",
+    "gf_reply_limit": 5,
+    "gf_auto_link": true
+  },
+  "api_version": "1.0",
+  "permissions": [
+    "config",
+    "send"
+  ]
+}

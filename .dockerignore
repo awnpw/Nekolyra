@@ -1,0 +1,35 @@
+# 不进镜像的东西。
+# 注意别把 data/ 整个排掉 —— Dockerfile 里要 COPY data/plugins/。
+
+.git/
+.github/
+.skills/
+_shots/
+docs/
+dist/
+build/
+__pycache__/
+**/__pycache__/
+*.pyc
+*.pyo
+
+# 密钥和本地配置：一定不能进镜像
+config.json
+config.json.bak*
+.env
+*.db
+*.db.bak*
+
+# 备份、压缩包、日志
+*.zip
+*.bak*
+*.log
+*.tmp
+
+# 我这边的开发/测试脚本（_ 开头的那批）
+_*.py
+_*.ps1
+_*.txt
+
+*.md
+!README.md
