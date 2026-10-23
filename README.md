@@ -11,7 +11,7 @@
 ![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20Linux%20%7C%20Docker-6b7280)
 [![Version](https://img.shields.io/badge/version-1.0.5.2-2ea44f)](VERSION)
 
-[**简体中文**](README.md) · [English](README.en.md) · [更新日志](CHANGELOG.md) · [界面一览](#界面一览) · [常见问题](docs/常见问题.md)
+[**介绍页**](https://awnpw.github.io/Nekolyra/) · [**简体中文**](README.md) · [English](README.en.md) · [更新日志](CHANGELOG.md) · [界面一览](#界面一览) · [常见问题](docs/常见问题.md)
 
 <sub>装在哪、数据放哪、能干什么，往下三屏就能看完 —— 不想读长文就点 <a href="#三分钟快速开始">三分钟快速开始</a>。</sub>
 
