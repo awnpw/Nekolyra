@@ -226,24 +226,65 @@ def remove_path(p):
         pass
 
 
-def rollback(install, exe, made, started_pid):
-    """回滚：杀掉新进程 → 把每个条目按备份精确还原。"""
-    log("开始回滚")
-    if started_pid and pid_alive(started_pid):
+def force_remove(p, tries=12, delay=0.5):
+    """删文件/目录，带重试。
+
+    Windows 上进程刚被杀掉时句柄不一定立刻释放，直接 os.remove 会报
+    PermissionError，紧接着 rename 就会撞 FileExistsError —— 回滚会失败。"""
+    for i in range(tries):
+        if not os.path.exists(p):
+            return True
         try:
-            subprocess.run(["taskkill", "/PID", str(started_pid), "/F"],
-                           capture_output=True, creationflags=NO_WINDOW, timeout=30)
+            if os.path.isdir(p):
+                shutil.rmtree(p, ignore_errors=True)
+            else:
+                os.remove(p)
         except Exception:
             pass
+        if not os.path.exists(p):
+            return True
+        time.sleep(delay)
+    return not os.path.exists(p)
+
+
+def rollback(install, exe, made, started_pid):
+    """回滚：杀掉新进程 → 等它真的退出 → 带重试删掉半成品 → 逐个还原。"""
+    log("开始回滚")
+    if started_pid:
+        for _ in range(10):
+            if not pid_alive(started_pid):
+                break
+            try:
+                subprocess.run(["taskkill", "/PID", str(started_pid), "/F", "/T"],
+                               capture_output=True, creationflags=NO_WINDOW, timeout=30)
+            except Exception:
+                pass
+            time.sleep(0.5)
+        if pid_alive(started_pid):
+            log("新进程 %s 杀不掉，回滚可能失败" % started_pid)
+        else:
+            log("新进程已结束（pid %s）" % started_pid)
+
     restored = failed = 0
     for dst, src in reversed(made):
-        remove_path(src)
-        try:
-            os.rename(dst, src)
-            restored += 1
-        except Exception as e:
+        if not force_remove(src):
             failed += 1
-            log("还原 %s 失败：%s: %s" % (src, type(e).__name__, e))
+            log("删除半成品失败：%s（文件被占用）" % src)
+            continue
+        ok = False
+        for _ in range(10):
+            try:
+                os.rename(dst, src)
+                ok = True
+                break
+            except Exception as e:
+                last = e
+                time.sleep(0.5)
+        if ok:
+            restored += 1
+        else:
+            failed += 1
+            log("还原 %s 失败：%s" % (src, last))
     log("回滚完成：还原 %d 项，失败 %d 项" % (restored, failed))
     return failed == 0
 
@@ -381,9 +422,14 @@ def main():
         log("验收：%s（%s）" % ("通过" if good else "未通过", note))
         if not good:
             rb_ok = rollback(install, a.exe, backups, pid)
+            if not rb_ok:
+                # 回滚不完整时**不要**启动任何东西：安装目录现在是半新半旧，
+                # 拉起来只会让人以为更新成功了。留日志让用户按提示手工处理。
+                log("回滚不完整，已停止；请把 *%s 改回原名后重启" % ".bak_" )
+                return 10
+            log("已回滚到上一版")
             if a.restart:
                 launch(install, a.exe)
-            log("已回滚到上一版%s" % ("" if rb_ok else "，但回滚不完整"))
             return 8
 
     log("更新成功")
