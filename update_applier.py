@@ -1,22 +1,35 @@
 # -*- coding: utf-8 -*-
 """更新应用器（也兼作 NekolyraUpdater.exe 的入口）。
 
-设计原则：**任何一步失败都不能让安装目录卡在半新半旧的状态。**
+**为什么不直接在安装目录里逐文件覆盖**（上一版的写法，三个真实风险）：
 
-    preflight  预检：payload 完整性 / 版本方向 / 磁盘余量 / 可选 SHA-256
-    backup     备份：exe 与 _internal 改名（同盘 rename，快且可逆）
-    apply      覆盖：逐文件 copy2，不用 /move —— payload 留着，失败了还能重试
-    verify     验收：拉起新 exe，等端口就绪 + 进程存活
-    成功       清理 payload / 旧 zip / 多余备份
-    失败       回滚：杀掉新进程、删除半成品、改名还原、拉起旧版
+  1. Windows 下正在运行的 exe/dll 被锁，先关主进程也可能被子进程、
+     杀毒、资源管理器、搜索索引器临时占着；
+  2. 逐文件 copy2 是几百次写操作，中途断电/崩溃就留下半新半旧的目录；
+  3. 更新器自己若是崩在中间，回滚逻辑根本没机会执行。
 
-被替换/被回滚的只有程序本体（exe + _internal），**绝不碰 data/**。
+所以改成「暂存 + 原子换名 + 日志自愈」：
 
-用法（由主程序退出前拉起）：
-    NekolyraUpdater.exe --install <安装根> --payload <暂存目录> --wait-pid <pid>
+    stage   把 payload 复制到 install/_stage_<ts>/（全新的目录，不碰活的文件）
+            —— 这一步崩了，安装目录一个字节都没动，只留个垃圾目录
+    verify  核对暂存区的文件数
+    swap    对每个顶层条目：活的重命名成 .old_<ts>，暂存的换成正式名
+            —— 每次 rename 都是原子的，实测被占用时会明确失败（WinError 5/32），
+               不会出现"改一半"；总共只有几个条目，暴露窗口从"几百次写"缩到"几次改名"
+    health  拉起新 exe，等「端口就绪 + 进程存活」
+    成功     删 .old_*、删暂存、清旧 zip
+    失败     反向 rename 还原
+
+**journal**：每次换阶段前把状态写进 data/updates/update_journal.json。
+更新器自己崩了也没关系 —— 下次启动（程序侧或更新器侧）读它就知道该还原什么。
+
+用法：
+    NekolyraUpdater.exe --install <根> --payload <暂存> --wait-pid <pid>
                         --exe Nekolyra.exe --restart --ready-port 8080
+    NekolyraUpdater.exe --install <根> --recover        # 只做自愈，不更新
 """
 import argparse
+import json
 import os
 import shutil
 import socket
@@ -35,6 +48,9 @@ NO_WINDOW = 0x08000000
 DETACHED = 0x00000008
 CREATE_NEW_GROUP = 0x00000200
 STILL_ACTIVE = 259
+OLD_PREFIX = ".old_"
+STAGE_PREFIX = "_stage_"
+JOURNAL_NAME = "update_journal.json"
 
 
 def log(msg):
@@ -51,11 +67,19 @@ def log(msg):
             pass
 
 
-# ---------------- 进程存活判断 ----------------
-# 为什么不用 tasklist：它要解析文本（/FI 失效时返回全表），
-# 子串匹配 "PID 在不在输出里" 会把"还在运行"误判成"已退出"，
-# 然后往运行中的程序上盖文件 —— 最坏的那种失败。
+def set_log(install):
+    global LOG_PATH
+    try:
+        d = os.path.join(install, "data", "updates")
+        os.makedirs(d, exist_ok=True)
+        LOG_PATH = os.path.join(d, "update.log")
+    except Exception:
+        LOG_PATH = os.path.join(os.environ.get("TEMP", "."), "nekolyra_update.log")
+
+
+# ---------------- 进程 ----------------
 def pid_alive(pid):
+    """不用 tasklist：它要解析文本，过滤失效返回全表时会把"还在跑"判成"已退出"。"""
     if not pid:
         return False
     if os.name != "nt":
@@ -67,7 +91,7 @@ def pid_alive(pid):
     try:
         import ctypes
         k32 = ctypes.windll.kernel32
-        h = k32.OpenProcess(0x1000, False, int(pid))   # PROCESS_QUERY_LIMITED_INFORMATION
+        h = k32.OpenProcess(0x1000, False, int(pid))
         if not h:
             return False
         try:
@@ -94,7 +118,7 @@ def wait_pid_exit(pid, timeout=180.0):
     return False
 
 
-# ---------------- 版本与容量 ----------------
+# ---------------- 版本 / 容量 ----------------
 def read_version(root):
     try:
         with open(os.path.join(root, "VERSION"), "r", encoding="utf-8") as f:
@@ -118,120 +142,159 @@ def dir_size(path):
     return total
 
 
-# ---------------- 预检 ----------------
-def preflight(install, payload, exe, allow_downgrade):
-    """返回 (ok, 原因)。这一关不过就一个字节都不动。"""
-    if not os.path.isdir(payload):
-        return False, "暂存目录不存在：%s" % payload
-    if not os.path.isfile(os.path.join(payload, exe)):
-        return False, "暂存目录里没有 %s，这不是完整安装包" % exe
-    inner = os.path.join(payload, "_internal")
-    if not os.path.isdir(inner):
-        return False, "暂存目录里没有 _internal/，更新包里缺运行库"
+# ---------------- journal ----------------
+def journal_path(install):
+    return os.path.join(install, "data", "updates", JOURNAL_NAME)
 
-    n_files = sum(len(fs) for _r, _d, fs in os.walk(payload))
-    if n_files < 20:
-        return False, "暂存目录只有 %d 个文件，明显不完整" % n_files
 
-    new_v, new_txt = read_version(payload)
-    old_v, old_txt = read_version(install)
-    if new_v and old_v and new_v < old_v and not allow_downgrade:
-        return False, "更新包版本 %s 比当前 %s 旧（要降级加 --allow-downgrade）" % (new_txt, old_txt)
-
-    need = dir_size(payload)
+def journal_write(install, data):
+    p = journal_path(install)
     try:
-        free = shutil.disk_usage(install).free
+        os.makedirs(os.path.dirname(p), exist_ok=True)
+        tmp = p + ".tmp"
+        with open(tmp, "w", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=False, indent=1)
+        os.replace(tmp, p)
+    except Exception as e:
+        log("写 journal 失败：%s: %s" % (type(e).__name__, e))
+
+
+def journal_read(install):
+    try:
+        with open(journal_path(install), "r", encoding="utf-8") as f:
+            return json.load(f)
     except Exception:
-        free = 0
-    if free and free < need * 1.5:
-        return False, "磁盘余量不足：需要约 %.0f MB，只剩 %.0f MB" % (need / 1048576, free / 1048576)
-
-    log("预检通过：%d 个文件 / %.1f MB，版本 %s -> %s"
-        % (n_files, need / 1048576, old_txt or "?", new_txt or "?"))
-    return True, ""
+        return None
 
 
-# ---------------- 备份 / 覆盖 / 回滚 ----------------
-def make_backup(install, payload, exe, stamp, made):
-    """把「payload 顶层会覆盖到的每个条目」改名备份。
+def journal_clear(install):
+    try:
+        os.remove(journal_path(install))
+    except Exception:
+        pass
 
-    为什么不是只备份 exe + _internal：payload 里还有 VERSION / requirements.txt 这些
-    根目录文件，它们也会被覆盖。只备份程序本体的话，回滚后就成了
-    「新 VERSION + 旧程序」—— 还是半新半旧，只是不容易看出来。
-    改名失败（文件被占用）说明主程序没退干净，此时必须停下，一个字节都别动。
+
+# ---------------- 自愈 ----------------
+def recover(install, exe="Nekolyra.exe"):
+    """按 journal 把没做完的更新收拾干净。返回一句人类可读的结论。"""
+    j = journal_read(install)
+    if not j:
+        return "no journal"
+    phase = str(j.get("phase") or "")
+    stamp = str(j.get("stamp") or "")
+    items = j.get("items") or []
+    log("发现未完成的更新（阶段 %s，时间戳 %s）" % (phase, stamp))
+
+    if phase in ("stage", "preflight"):
+        stage = j.get("stage") or ""
+        if stage and os.path.isdir(stage):
+            force_remove(stage)
+            log("已清理未完成的暂存目录")
+        journal_clear(install)
+        return "discarded stage (安装目录未改动)"
+
+    if phase in ("swap", "verify", "rollback"):
+        kill_processes_under(install)          # 残留进程会锁着 exe/dll，不杀掉还原必失败
+        restored = 0
+        for it in reversed(items):
+            live = it.get("live") or ""
+            old = it.get("old") or ""
+            if not live or not old:
+                continue
+            if os.path.exists(old):
+                force_remove(live)
+                for _ in range(20):
+                    try:
+                        os.rename(old, live)
+                        restored += 1
+                        break
+                    except Exception:
+                        time.sleep(0.5)
+                else:
+                    log("还原失败：%s" % live)
+        stage = j.get("stage") or ""
+        if stage and os.path.isdir(stage):
+            force_remove(stage)
+        journal_clear(install)
+        log("自愈完成，还原 %d 项" % restored)
+        return "rolled back %d items" % restored
+
+    journal_clear(install)
+    return "journal phase %s ignored" % phase
+
+
+# ---------------- 工具 ----------------
+def kill_processes_under(install):
+    """杀掉可执行文件路径位于安装目录下的进程。
+
+    为什么必须做：新版本刚被拉起来就验收失败时，那个进程还活着并占着 exe/dll，
+    改名还原会失败；用户说的"子进程、后台线程残留"就是这个。
+    只按**可执行文件路径**匹配，绝不用镜像名 —— 同名的程序可能不止一个。
     """
-    names = set()
+    if os.name != "nt":
+        return 0
     try:
-        names.update(os.listdir(payload))
-    except Exception:
-        pass
-    names.add(exe)
-    names.add("_internal")
-    pairs = []
-    for name in sorted(names):
-        src = os.path.join(install, name)
-        if not os.path.exists(src):
-            continue
-        dst = src + ".bak_" + stamp
+        import ctypes
+        from ctypes import wintypes
+        k32 = ctypes.windll.kernel32
+        TH32CS_SNAPPROCESS = 0x2
+        PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
+        PROCESS_TERMINATE = 0x0001
+
+        class PE32(ctypes.Structure):
+            _fields_ = [("dwSize", wintypes.DWORD), ("cntUsage", wintypes.DWORD),
+                        ("th32ProcessID", wintypes.DWORD),
+                        ("th32DefaultHeapID", ctypes.POINTER(ctypes.c_ulong)),
+                        ("th32ModuleID", wintypes.DWORD), ("cntThreads", wintypes.DWORD),
+                        ("th32ParentProcessID", wintypes.DWORD),
+                        ("pcPriClassBase", ctypes.c_long), ("dwFlags", wintypes.DWORD),
+                        ("szExeFile", ctypes.c_char * 260)]
+
+        snap = k32.CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0)
+        if snap == -1:
+            return 0
+        entry = PE32()
+        entry.dwSize = ctypes.sizeof(PE32)
+        me = os.getpid()
+        root = os.path.abspath(install).lower()
+        killed = 0
         try:
-            os.rename(src, dst)
-            pairs.append((dst, src))
-        except Exception as e:
-            log("备份 %s 失败（可能被占用）：%s: %s" % (name, type(e).__name__, e))
-            for d, s in reversed(pairs):
-                try:
-                    os.rename(d, s)
-                except Exception:
-                    pass
-            return False
-    made.extend(pairs)
-    log("已备份 %d 项（后缀 %s）：%s" % (len(pairs), stamp, ", ".join(os.path.basename(s) for _d, s in pairs)))
-    return True
-
-
-def copy_tree(src, dst):
-    """逐文件复制。返回 (ok, 失败数, 首条错误)。不删源目录。"""
-    ok = fail = 0
-    first_err = ""
-    for root, _dirs, files in os.walk(src):
-        rel = os.path.relpath(root, src)
-        target_root = dst if rel == "." else os.path.join(dst, rel)
-        try:
-            os.makedirs(target_root, exist_ok=True)
-        except Exception as e:
-            fail += len(files)
-            first_err = first_err or ("建目录 %s: %s" % (target_root, e))
-            continue
-        for name in files:
-            s = os.path.join(root, name)
-            d = os.path.join(target_root, name)
-            try:
-                shutil.copy2(s, d)
-                ok += 1
-            except Exception as e:
-                fail += 1
-                if not first_err:
-                    first_err = "%s: %s" % (name, e)
-    log("复制完成：成功 %d，失败 %d%s" % (ok, fail, ("；首个错误 " + first_err) if first_err else ""))
-    return fail == 0, fail, first_err
-
-
-def remove_path(p):
-    try:
-        if os.path.isdir(p):
-            shutil.rmtree(p, ignore_errors=True)
-        elif os.path.isfile(p):
-            os.remove(p)
-    except Exception:
-        pass
+            ok = k32.Process32First(snap, ctypes.byref(entry))
+            while ok:
+                pid = int(entry.th32ProcessID)
+                if pid and pid != me:
+                    h = k32.OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, False, pid)
+                    if h:
+                        try:
+                            buf = ctypes.create_unicode_buffer(1024)
+                            size = wintypes.DWORD(1024)
+                            if k32.QueryFullProcessImageNameW(h, 0, buf, ctypes.byref(size)):
+                                path = buf.value.lower()
+                                if path.startswith(root):
+                                    hp = k32.OpenProcess(PROCESS_TERMINATE, False, pid)
+                                    if hp:
+                                        try:
+                                            k32.TerminateProcess(hp, 1)
+                                            killed += 1
+                                        finally:
+                                            k32.CloseHandle(hp)
+                        finally:
+                            k32.CloseHandle(h)
+                ok = k32.Process32Next(snap, ctypes.byref(entry))
+        finally:
+            k32.CloseHandle(snap)
+        if killed:
+            log("已终止 %d 个占用安装目录的进程" % killed)
+            time.sleep(1.0)
+        return killed
+    except Exception as e:
+        log("枚举进程失败：%s: %s" % (type(e).__name__, e))
+        return 0
 
 
 def force_remove(p, tries=12, delay=0.5):
-    """删文件/目录，带重试。
-
-    Windows 上进程刚被杀掉时句柄不一定立刻释放，直接 os.remove 会报
-    PermissionError，紧接着 rename 就会撞 FileExistsError —— 回滚会失败。"""
-    for i in range(tries):
+    """删文件/目录，带重试。进程刚退出时句柄不一定立刻释放。"""
+    for _ in range(tries):
         if not os.path.exists(p):
             return True
         try:
@@ -247,59 +310,78 @@ def force_remove(p, tries=12, delay=0.5):
     return not os.path.exists(p)
 
 
-def rollback(install, exe, made, started_pid):
-    """回滚：杀掉新进程 → 等它真的退出 → 带重试删掉半成品 → 逐个还原。"""
-    log("开始回滚")
-    if started_pid:
-        for _ in range(10):
-            if not pid_alive(started_pid):
-                break
-            try:
-                subprocess.run(["taskkill", "/PID", str(started_pid), "/F", "/T"],
-                               capture_output=True, creationflags=NO_WINDOW, timeout=30)
-            except Exception:
-                pass
-            time.sleep(0.5)
-        if pid_alive(started_pid):
-            log("新进程 %s 杀不掉，回滚可能失败" % started_pid)
-        else:
-            log("新进程已结束（pid %s）" % started_pid)
+def rename_retry(src, dst, tries=12, delay=0.5):
+    last = None
+    for _ in range(tries):
+        try:
+            os.rename(src, dst)
+            return True, ""
+        except Exception as e:
+            last = e
+            time.sleep(delay)
+    return False, "%s: %s" % (type(last).__name__, last)
 
-    restored = failed = 0
-    for dst, src in reversed(made):
-        if not force_remove(src):
-            failed += 1
-            log("删除半成品失败：%s（文件被占用）" % src)
+
+def copy_tree(src, dst):
+    ok = fail = 0
+    first_err = ""
+    for root, _dirs, files in os.walk(src):
+        rel = os.path.relpath(root, src)
+        target_root = dst if rel == "." else os.path.join(dst, rel)
+        try:
+            os.makedirs(target_root, exist_ok=True)
+        except Exception as e:
+            fail += len(files)
+            first_err = first_err or ("建目录 %s: %s" % (target_root, e))
             continue
-        ok = False
-        for _ in range(10):
+        for name in files:
             try:
-                os.rename(dst, src)
-                ok = True
-                break
+                shutil.copy2(os.path.join(root, name), os.path.join(target_root, name))
+                ok += 1
             except Exception as e:
-                last = e
-                time.sleep(0.5)
-        if ok:
-            restored += 1
-        else:
-            failed += 1
-            log("还原 %s 失败：%s" % (src, last))
-    log("回滚完成：还原 %d 项，失败 %d 项" % (restored, failed))
-    return failed == 0
+                fail += 1
+                if not first_err:
+                    first_err = "%s: %s" % (name, e)
+    log("暂存复制：成功 %d，失败 %d%s" % (ok, fail, ("；首个错误 " + first_err) if first_err else ""))
+    return fail == 0, fail, first_err
 
 
-# ---------------- 拉起与验收 ----------------
+# ---------------- 预检 ----------------
+def preflight(install, payload, exe, allow_downgrade):
+    if not os.path.isdir(payload):
+        return False, "暂存目录不存在：%s" % payload
+    if not os.path.isfile(os.path.join(payload, exe)):
+        return False, "暂存目录里没有 %s，这不是完整安装包" % exe
+    if not os.path.isdir(os.path.join(payload, "_internal")):
+        return False, "暂存目录里没有 _internal/，更新包里缺运行库"
+    n_files = sum(len(fs) for _r, _d, fs in os.walk(payload))
+    if n_files < 20:
+        return False, "暂存目录只有 %d 个文件，明显不完整" % n_files
+    new_v, new_txt = read_version(payload)
+    old_v, old_txt = read_version(install)
+    if new_v and old_v and new_v < old_v and not allow_downgrade:
+        return False, "更新包版本 %s 比当前 %s 旧（要降级加 --allow-downgrade）" % (new_txt, old_txt)
+    need = dir_size(payload)
+    try:
+        free = shutil.disk_usage(install).free
+    except Exception:
+        free = 0
+    if free and free < need * 2:
+        return False, "磁盘余量不足：暂存 + 切换需要约 %.0f MB，只剩 %.0f MB" % (need * 2 / 1048576, free / 1048576)
+    log("预检通过：%d 个文件 / %.1f MB，版本 %s -> %s"
+        % (n_files, need / 1048576, old_txt or "?", new_txt or "?"))
+    return True, ""
+
+
+# ---------------- 拉起 / 验收 ----------------
 def launch(install, exe):
     path = os.path.join(install, exe)
     if not os.path.isfile(path):
         return 0
-    flags = 0
-    if os.name == "nt":
-        flags = DETACHED | CREATE_NEW_GROUP
+    flags = DETACHED | CREATE_NEW_GROUP if os.name == "nt" else 0
     try:
         p = subprocess.Popen([path], cwd=install, close_fds=True, creationflags=flags)
-        log("已拉起新版：%s（pid %d）" % (exe, p.pid))
+        log("已拉起：%s（pid %d）" % (exe, p.pid))
         return p.pid
     except Exception as e:
         log("拉起失败：%s: %s" % (type(e).__name__, e))
@@ -324,7 +406,6 @@ def port_ready(port, timeout=1.0):
 
 
 def health_check(pid, port, timeout):
-    """等「端口就绪 + 进程还活着」。两者都要，只看一个都可能误判。"""
     t0 = time.time()
     while time.time() - t0 < timeout:
         if pid and not pid_alive(pid):
@@ -336,35 +417,30 @@ def health_check(pid, port, timeout):
 
 
 # ---------------- 清理 ----------------
-def cleanup(payload, install, keep_backups):
-    remove_path(payload)
-    # 旧 zip
+def cleanup(install, stage, keep_backups):
+    force_remove(stage)
     upd_dir = os.path.join(install, "data", "updates")
     if os.path.isdir(upd_dir):
         for name in os.listdir(upd_dir):
             if name.lower().endswith(".zip"):
-                remove_path(os.path.join(upd_dir, name))
-    # 过多备份：只留最近 keep_backups 组
+                force_remove(os.path.join(upd_dir, name))
     try:
         groups = {}
         for name in os.listdir(install):
-            if ".bak_" in name:
-                stamp = name.split(".bak_")[-1]
-                groups.setdefault(stamp, []).append(name)
-        stamps = sorted(groups.keys(), reverse=True)
-        for st in stamps[keep_backups:]:
+            if OLD_PREFIX in name:
+                groups.setdefault(name.split(OLD_PREFIX)[-1], []).append(name)
+        for st in sorted(groups.keys(), reverse=True)[keep_backups:]:
             for name in groups[st]:
-                remove_path(os.path.join(install, name))
-            log("清理旧备份 %s" % st)
+                force_remove(os.path.join(install, name))
+                log("清理旧备份 %s" % name)
     except Exception as e:
         log("清理备份出错：%s" % e)
 
 
 def main():
-    global LOG_PATH
     ap = argparse.ArgumentParser()
     ap.add_argument("--install", required=True)
-    ap.add_argument("--payload", required=True)
+    ap.add_argument("--payload", default="")
     ap.add_argument("--wait-pid", type=int, default=0)
     ap.add_argument("--exe", default="Nekolyra.exe")
     ap.add_argument("--restart", action="store_true")
@@ -372,20 +448,27 @@ def main():
     ap.add_argument("--ready-timeout", type=float, default=90.0)
     ap.add_argument("--keep-backups", type=int, default=1)
     ap.add_argument("--allow-downgrade", action="store_true")
+    ap.add_argument("--recover", action="store_true")
     ap.add_argument("--dry-run", action="store_true")
     a = ap.parse_args()
 
     install = os.path.abspath(a.install)
-    payload = os.path.abspath(a.payload)
-    upd_dir = os.path.join(install, "data", "updates")
-    try:
-        os.makedirs(upd_dir, exist_ok=True)
-        LOG_PATH = os.path.join(upd_dir, "update.log")
-    except Exception:
-        LOG_PATH = os.path.join(os.environ.get("TEMP", "."), "nekolyra_update.log")
+    set_log(install)
 
+    if a.recover:
+        log("=" * 56)
+        log("自愈模式：%s" % install)
+        result = recover(install, a.exe)      # 只调一次：它会自己判断该不该动手
+        log("自愈结果：%s" % result)
+        return 0 if result else 1
+
+    payload = os.path.abspath(a.payload) if a.payload else ""
     log("=" * 56)
     log("更新开始：%s -> %s" % (payload, install))
+
+    # 先收拾上一次没做完的
+    if journal_read(install):
+        recover(install, a.exe)
 
     ok, why = preflight(install, payload, a.exe, a.allow_downgrade)
     if not ok:
@@ -395,46 +478,114 @@ def main():
     if not wait_pid_exit(a.wait_pid):
         log("主进程仍在运行，放弃本次更新（安装目录未改动）")
         return 4
-    time.sleep(1.5)      # 给句柄释放留一点余量
+    time.sleep(1.5)
 
     stamp = time.strftime("%Y%m%d_%H%M%S")
-    backups = []
-    if not make_backup(install, payload, a.exe, stamp, backups):
-        log("备份失败，放弃本次更新（安装目录未改动）")
-        return 5
+    stage = os.path.join(install, STAGE_PREFIX + stamp)
+    items = [n for n in sorted(os.listdir(payload)) if os.path.exists(os.path.join(payload, n))]
+    plan = [{"name": n,
+             "live": os.path.join(install, n),
+             "old": os.path.join(install, n + OLD_PREFIX + stamp),
+             "stage": os.path.join(stage, n)} for n in items]
 
-    copied, _fail, _err = copy_tree(payload, install)
-    if not copied:
-        log("复制阶段有失败，回滚")
-        if rollback(install, a.exe, backups, 0) and a.restart:
-            launch(install, a.exe)
+    # --- 1) 暂存 ---
+    journal_write(install, {"phase": "stage", "stamp": stamp, "stage": stage, "items": plan})
+    force_remove(stage)
+    try:
+        os.makedirs(stage, exist_ok=True)
+    except Exception as e:
+        log("建暂存目录失败：%s" % e)
+        journal_clear(install)
+        return 3
+    ok, _n, err = copy_tree(payload, stage)
+    if not ok:
+        log("暂存失败，安装目录未改动：" + err)
+        force_remove(stage)
+        journal_clear(install)
+        return 6
+
+    staged_files = sum(len(fs) for _r, _d, fs in os.walk(stage))
+    if staged_files < 20 or not os.path.isfile(os.path.join(stage, a.exe)):
+        log("暂存区不完整（%d 个文件），放弃" % staged_files)
+        force_remove(stage)
+        journal_clear(install)
         return 6
 
     if a.dry_run:
-        log("--dry-run：复制与备份都成功，现在回滚以验证可逆性")
-        ok_rb = rollback(install, a.exe, backups, 0)
-        log("回滚%s" % ("成功（安装目录已复原）" if ok_rb else "失败！需要人工处理"))
-        return 0 if ok_rb else 7
+        log("--dry-run：暂存 %d 个文件成功；现在验证「换名」是否可行（不真正切换）" % staged_files)
+        blocked = 0
+        for it in plan:
+            if os.path.exists(it["live"]):
+                try:
+                    os.rename(it["live"], it["live"] + ".probe")
+                    os.rename(it["live"] + ".probe", it["live"])
+                except Exception as e:
+                    blocked += 1
+                    log("  占用中，无法换名：%s（%s）" % (it["name"], type(e).__name__))
+        force_remove(stage)
+        journal_clear(install)
+        log("干跑结论：%d 个条目被占用" % blocked)
+        return 0 if blocked == 0 else 5
 
+    # --- 2) 换名（原子）---
+    kill_processes_under(install)      # 任何还占着安装目录的残留进程，先清掉
+    journal_write(install, {"phase": "swap", "stamp": stamp, "stage": stage, "items": plan})
+    swapped = []
+    for it in plan:
+        if os.path.exists(it["live"]):
+            ok_r, err = rename_retry(it["live"], it["old"])
+            if not ok_r:
+                log("换名失败（%s 被占用）：%s" % (it["name"], err))
+                _undo(install, swapped)
+                force_remove(stage)
+                return 5
+            swapped.append(it)
+        ok_r, err = rename_retry(it["stage"], it["live"])
+        if not ok_r:
+            log("就位失败（%s）：%s" % (it["name"], err))
+            _undo(install, swapped)
+            force_remove(stage)
+            return 5
+    log("换名完成：%d 个条目已切换到新版" % len(plan))
+
+    # --- 3) 验收 ---
+    journal_write(install, {"phase": "verify", "stamp": stamp, "stage": stage,
+                            "items": [{"name": it["name"], "live": it["live"], "old": it["old"]} for it in plan]})
     pid = launch(install, a.exe) if a.restart else 0
     if a.restart:
         good, note = health_check(pid, a.ready_port, a.ready_timeout)
         log("验收：%s（%s）" % ("通过" if good else "未通过", note))
         if not good:
-            rb_ok = rollback(install, a.exe, backups, pid)
-            if not rb_ok:
-                # 回滚不完整时**不要**启动任何东西：安装目录现在是半新半旧，
-                # 拉起来只会让人以为更新成功了。留日志让用户按提示手工处理。
-                log("回滚不完整，已停止；请把 *%s 改回原名后重启" % ".bak_" )
-                return 10
-            log("已回滚到上一版")
-            if a.restart:
-                launch(install, a.exe)
-            return 8
+            if pid and pid_alive(pid):
+                for _ in range(10):
+                    subprocess.run(["taskkill", "/PID", str(pid), "/F", "/T"],
+                                   capture_output=True, creationflags=NO_WINDOW)
+                    if not pid_alive(pid):
+                        break
+                    time.sleep(0.5)
+            rb = recover(install, a.exe)
+            log("回滚结果：%s" % rb)
+            if rb.startswith("rolled back"):
+                if a.restart:
+                    launch(install, a.exe)
+                return 8
+            log("回滚不完整，已停止；手工恢复办法：把 install 下的 *%s<时间戳> 改回原名" % OLD_PREFIX)
+            return 10
 
     log("更新成功")
-    cleanup(payload, install, max(0, a.keep_backups))
+    journal_write(install, {"phase": "done", "stamp": stamp, "stage": stage, "items": []})
+    cleanup(install, stage, max(0, a.keep_backups))
+    journal_clear(install)
     return 0
+
+
+def _undo(install, swapped):
+    """把已经换过的条目改名还原（换名阶段失败时用）。"""
+    for it in reversed(swapped):
+        if os.path.exists(it["old"]):
+            force_remove(it["live"])
+            ok, err = rename_retry(it["old"], it["live"])
+            log("还原 %s：%s" % (it["name"], "OK" if ok else err))
 
 
 if __name__ == "__main__":

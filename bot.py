@@ -8980,6 +8980,60 @@ def _restart_process():
     sys.exit(0)
 
 
+def _recover_pending_update():
+    """上一次覆盖更新没做完时，按 journal 收拾干净。
+
+    为什么放在程序启动时做：更新器可能在换名/验收中途被强杀（断电、杀毒、
+    用户强退），那时它自己的回滚逻辑已经没机会跑了。journal 里记着改过哪些条目，
+    下次任何一个进程启动都能据此还原 —— 这里是最早能跑代码的地方。
+    """
+    import json as _json
+    p = os.path.join(BASE_DIR, "data", "updates", "update_journal.json")
+    if not os.path.isfile(p):
+        return
+    try:
+        with open(p, "r", encoding="utf-8") as f:
+            j = _json.load(f)
+    except Exception:
+        return
+    phase = str(j.get("phase") or "")
+    items = j.get("items") or []
+    try:
+        log_startup("发现未完成的更新（阶段 %s），开始自愈" % phase)
+    except Exception:
+        pass
+    if phase in ("swap", "verify", "rollback"):
+        restored = 0
+        for it in reversed(items):
+            live = it.get("live") or ""
+            old = it.get("old") or ""
+            if not live or not old or not os.path.exists(old):
+                continue
+            try:
+                if os.path.isdir(live):
+                    shutil.rmtree(live, ignore_errors=True)
+                elif os.path.exists(live):
+                    os.remove(live)
+                os.rename(old, live)
+                restored += 1
+            except Exception as e:
+                try:
+                    log_startup("自愈还原失败 %s：%s: %s" % (os.path.basename(live), type(e).__name__, e))
+                except Exception:
+                    pass
+        try:
+            log_startup("自愈完成：还原 %d 项" % restored)
+        except Exception:
+            pass
+    stage = j.get("stage") or ""
+    try:
+        if stage and os.path.isdir(stage):
+            shutil.rmtree(stage, ignore_errors=True)
+        os.remove(p)
+    except Exception:
+        pass
+
+
 def main():
     """启动管理界面（uvicorn + 桌面窗口）。只有直接运行本文件时才会执行。"""
     # 这里原本有 global MAIN_LOOP —— main() 只读它、从不赋值，
@@ -9001,6 +9055,13 @@ def main():
                  f"请编辑配置文件：\n{CONFIG_PATH}\n\n"
                  f"至少填上 superusers（你的QQ号）和 admin_token（管理密码）。")
         sys.exit(0)
+
+    # 上一次覆盖更新如果没做完（更新器被强杀/断电），先按 journal 还原，
+    # 否则带着半新半旧的目录运行会莫名其妙地崩。
+    try:
+        _recover_pending_update()
+    except Exception as _e:
+        log_startup("启动自愈出错（继续启动）：%s: %s" % (type(_e).__name__, _e))
 
     MAIN_LOOP_READY.clear()
     print_banner()
