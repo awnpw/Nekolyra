@@ -1,0 +1,13 @@
+{
+    "name": "lexicon",
+    "version": "1.0.0",
+    "api_version": "1.0",
+    "entry": "main.py",
+    "description": "互动式学习：遇到不懂的词会主动问，有人解释就记住，并写进知识库供她之后使用",
+    "permissions": [
+        "db",
+        "send",
+        "ai"
+    ],
+    "author": "Nekolyra"
+}

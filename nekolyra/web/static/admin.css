@@ -1,0 +1,955 @@
+/* ================= 外观：启动器化 =================
+   参考做法（游戏官网 / HoYo 系启动器）：
+   大标题 + 英雄区露图 + 发光 + 大留白。
+   这里的每条覆盖都写在注入块里，只有开了壁纸才生效。 */
+
+/* 1. 英雄区：侧边栏顶部直接露壁纸，logo 压在上面 */
+.side{padding:0;overflow:hidden;
+  display:flex;flex-direction:column}
+.side .brand{position:relative;padding:20px 16px 18px;
+  margin:0;border-bottom:1px solid var(--glass-line);
+  background-image:var(--wall);
+  background-size:190% auto;background-position:38% 22%;
+  background-repeat:no-repeat}
+.side .brand::before{content:"";position:absolute;inset:0;
+  background:linear-gradient(140deg,rgba(6,10,24,.72) 0%,
+    rgba(6,10,24,.52) 55%,rgba(6,10,24,.30) 100%)}
+.side .brand>*{position:relative;z-index:1}
+.side .brand-title{color:#fff;text-shadow:0 1px 8px rgba(0,0,0,.6)}
+.side .brand-sub{color:rgba(255,255,255,.62)}
+.side .brand-ver{color:rgba(255,255,255,.72)}
+.side .brand-mark{box-shadow:0 2px 8px rgba(0,0,0,.34),
+  inset 0 1px 0 rgba(255,255,255,.28)}
+.nav{padding:12px 12px 0}
+.side-foot{margin:0 12px 12px;padding:10px 12px;border-radius:var(--radius-s);
+  background:var(--glass-2);border:1px solid var(--glass-line)}
+
+/* 2. 字放大、层级拉开 */
+.topbar{padding:16px 26px}
+.topbar h1{font-size:30px;font-weight:700;letter-spacing:-.025em;
+  line-height:1.15}
+.top-metrics{gap:8px}
+.metric{padding:6px 14px;border-radius:var(--radius-s);
+  background:var(--glass-2);border:1px solid var(--glass-line)}
+.metric .val{font-size:14px;font-weight:650}
+.metric-l{font-size:10px;letter-spacing:.12em}
+.content{padding:22px 26px 18px}
+.card{padding:26px 28px;margin-bottom:20px}
+.card-h h3{font-size:17px;font-weight:650;letter-spacing:-.015em}
+.card-h{padding-bottom:16px;margin-bottom:18px}
+.cfg-group-title{font-size:14px;font-weight:650;letter-spacing:.01em;
+  padding-left:11px;position:relative}
+.cfg-group-title::before{content:"";position:absolute;left:0;top:50%;
+  transform:translateY(-50%);width:3px;height:15px;
+  background:linear-gradient(180deg,var(--azure),var(--azure-deep));
+  border-radius:2px}
+
+/* 3. 统计卡：数字放大 + 主色辉光 */
+.stat,.stat-box,.ov-stat{position:relative;overflow:hidden}
+.stat .v,.stat-box .v,.ov-stat .v,.stat .num,.ov-stat .num{
+  font-size:40px;font-weight:750;letter-spacing:-.035em;line-height:1.05;
+  font-variant-numeric:tabular-nums}
+.stat .l,.stat-box .l,.ov-stat .l{font-size:12.5px;letter-spacing:.02em;
+  margin-top:6px;color:var(--text-3)}
+.stat::after,.stat-box::after,.ov-stat::after{content:"";position:absolute;
+  right:-30px;top:-30px;width:110px;height:110px;border-radius:50%;
+  background:radial-gradient(circle,var(--azure-soft) 0%,transparent 70%);
+  pointer-events:none}
+
+/* 4. 层级用描边和内高光表达，不用外发光
+      （界面规范：不用外发光） */
+.btn.primary{box-shadow:inset 0 1px 0 rgba(255,255,255,.18)}
+.btn.primary:hover{box-shadow:inset 0 1px 0 rgba(255,255,255,.24)}
+.nav-item.on{box-shadow:inset 0 0 0 1px var(--azure-line)}
+.nav-item.on::before{border-radius:0 3px 3px 0}
+
+/* 5. 大留白：表单与列表行都放开 */
+.form-row label{font-size:12.5px;letter-spacing:.01em;margin-bottom:7px}
+.form-row input,.form-row select,.form-row textarea{padding:11px 14px;
+  font-size:13.5px;border-radius:var(--radius-s)}
+.form-grid{gap:16px 18px}
+.tbl td{padding:13px 12px}
+.tbl th{padding:0 12px 14px;font-size:10.5px;letter-spacing:.13em}
+.logs{padding:14px 10px}
+
+/* 6. 概览页：统计行 -> 全宽横幅
+      跟内容卡片用**同一套玻璃**（--card-bg + 毛玻璃），数字用 --text。
+      以前这里写死"深底 + 白字"，页面上其他面板都是浅色半透明，
+      它就成了唯一一块近黑实心板 —— 看着格格不入。
+      也不再重画壁纸：横幅是扁条，对整页壁纸 cover 出来的裁切跟页面
+      背景完全不同，同一张脸会出现两份、大小还不同（重影）。
+
+      --card-bg / --panel-blur 都带兜底：壁纸关掉时 wall_css 不注入，
+      这两个变量根本不存在，不给兜底整条 background 会失效。 */
+.stat-grid{position:relative;overflow:hidden;
+  grid-template-columns:repeat(6,1fr);gap:0;
+  border-radius:var(--radius);margin-bottom:20px;
+  border:1px solid var(--glass-line);
+  background:var(--card-bg,#fff);
+  backdrop-filter:blur(var(--panel-blur,0px)) saturate(1.6);
+  -webkit-backdrop-filter:blur(var(--panel-blur,0px)) saturate(1.6);
+  box-shadow:var(--glass-shadow),var(--glass-hi)}
+.stat-grid::before{content:"";position:absolute;inset:0;
+  /* 一点方向光，给横幅加层次（不再是压图用的深罩） */
+  background:linear-gradient(105deg,
+    rgba(120,180,235,.055) 0%,transparent 58%)}
+.stat-grid>.stat-box{position:relative;z-index:1;
+  padding:26px 22px 24px;background:transparent;border:0;
+  border-right:1px solid var(--line);border-radius:0;
+  box-shadow:none;transition:background .18s var(--ease)}
+.stat-grid>.stat-box:last-child{border-right:0}
+.stat-grid>.stat-box:hover{background:transparent}
+.stat-grid .stat-box::after{display:none}
+.stat-grid .v{font-size:42px;font-weight:700;letter-spacing:-.04em;
+  line-height:1;color:var(--text);font-variant-numeric:tabular-nums}
+.stat-grid .l{margin-top:9px;font-size:12px;letter-spacing:.10em;
+  text-transform:uppercase;color:var(--text-3)}
+
+/* 7. 顶栏指标：浅色玻璃上浅色叠浅色看不见，给它对比底 */
+.topbar{background:var(--card-bg)}
+.metric{background:var(--bg-3);border:1px solid var(--line-2);
+  padding:6px 13px;border-radius:var(--radius-s);min-width:70px}
+.metric:hover{background:transparent;border-color:var(--aero-line)}
+.metric .metric-l{font-size:9.5px;letter-spacing:.11em;color:var(--text-3)}
+.metric .val{font-size:13.5px;font-weight:650;margin-top:4px}
+.clock{background:var(--bg-3);border-color:var(--line-2)}
+
+/* 8. 侧边栏：分组标签加重量，选中项更像"选中" */
+.nav-section{font-size:10px;letter-spacing:.17em;font-weight:700;
+  color:var(--text-3);padding:15px 12px 7px;
+  text-transform:uppercase}
+.nav-item{padding:9px 11px;border-radius:var(--radius-s)}
+.nav-item.on{background:var(--aero-soft)}
+.nav-item.on svg{color:var(--aero)}
+.nav-item svg{width:17px;height:17px}
+
+/* 9. 浅色模式：用户实际看的是这套。玻璃加厚，壁纸留在四周和缝里 */
+@media (prefers-color-scheme: light){
+  :root{
+        --glass-line:rgba(10,14,26,.10);
+        --glass-hi:inset 0 1px 0 rgba(255,255,255,.9);
+        --glass-shadow:0 6px 26px rgba(8,14,32,.10)}
+  .side .brand::before{background:linear-gradient(140deg,
+    rgba(6,10,24,.66) 0%,rgba(6,10,24,.44) 55%,rgba(6,10,24,.22) 100%)}
+}
+
+/* 10. 侧边栏做实 */
+.nav{padding:10px 10px 0}
+.nav-section{font-size:10.5px;letter-spacing:.15em;font-weight:700;
+  color:var(--text-3);padding:16px 12px 7px;text-transform:uppercase;
+  display:flex;align-items:center;gap:8px}
+.nav-section::after{content:"";flex:1;height:1px;background:var(--line)}
+.nav-item{padding:8px 11px;border-radius:var(--radius-s);gap:11px;
+  font-size:13px;font-weight:450;color:var(--text-2);
+  transition:background .13s var(--ease),color .13s var(--ease)}
+.nav-item span{letter-spacing:.005em}
+.nav-item:hover{background:var(--nav-hover);color:var(--text)}
+/* 选中：填充 + 左侧竖条 + 主色文字，三重信号 */
+.nav-item.on{background:linear-gradient(90deg,var(--aero-soft) 0%,
+    rgba(28,94,155,.03) 62%,transparent 100%);
+  color:var(--aero);font-weight:650;
+  box-shadow:inset 0 0 0 1px var(--aero-line)}
+.nav-item.on svg{color:var(--aero)}
+.nav-item.on::before{width:3px;height:22px;
+  box-shadow:0 0 9px var(--aero)}
+/* 徽章：中性可见，只有"待处理"才红 */
+.nav-item .badge{background:var(--bg-4);color:var(--text-2);
+  border:1px solid var(--line-2);font-weight:650;
+  font-size:10px;padding:1px 7px;border-radius:9px;min-width:19px}
+.nav-item.on .badge{background:var(--card-bg);color:var(--aero);
+  border-color:var(--aero-line)}
+.nav-item .badge.alert{background:var(--red);color:var(--on-accent);
+  border-color:var(--red);box-shadow:0 1px 4px rgba(220,38,38,.36)}
+
+/* 11. 顶栏：指标改成一条"状态条"，不是一个一个空框 */
+.topbar{gap:18px}
+.top-metrics{background:var(--bg-2);border:1px solid var(--line-2);
+  border-radius:var(--radius-s);padding:0;gap:0;overflow:hidden;
+  box-shadow:var(--shadow-xs)}
+.metric{background:transparent;border:0;border-radius:0;
+  border-left:1px solid var(--line);padding:7px 15px;min-width:0;
+  display:flex;flex-direction:column;align-items:flex-end;
+  transition:background .13s var(--ease)}
+.metric:first-child{border-left:0}
+.metric:hover{background:transparent;box-shadow:none}
+.metric .metric-l{font-size:9px;letter-spacing:.13em;font-weight:600;
+  color:var(--text-3);text-transform:uppercase;line-height:1}
+.metric .val{font-size:13px;font-weight:650;color:var(--text);
+  margin-top:4px;line-height:1.2;
+  font-family:"Cascadia Mono",ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,"Liberation Mono",monospace}
+.clock{background:var(--bg-2);border-color:var(--line-2);
+  font-weight:600;box-shadow:var(--shadow-xs)}
+
+/* ========== 界面规范修正 ==========
+   §7 NO Neon/Outer Glows —— 外发光全部换掉，改用内高光 + 同色低透明描边。
+   §7 NO Oversized H1s  —— 层级靠字重和颜色，不靠字号。
+   §3 Rule 3 ANTICENTER —— 统计行改非对称栅格（2fr 1fr 1fr 1fr 1fr 1fr）。
+   §3 Rule 5 Tactile    —— :active 下沉 1px。
+   §4 Liquid Glass      —— 1px 内边框 + inset 高光，模拟边缘折射。 */
+
+/* 1. 去掉所有外发光 */
+.btn.primary{box-shadow:inset 0 1px 0 rgba(255,255,255,.18)}
+.btn.primary:hover{box-shadow:inset 0 1px 0 rgba(255,255,255,.24)}
+.nav-item.on::before{box-shadow:none;width:3px}
+.nav-item.on{box-shadow:inset 0 0 0 1px var(--aero-line)}
+.upd-bar>i{box-shadow:none}
+.dot-live{box-shadow:none}
+
+/* 2. 页标题：降字号，改用字重 + 颜色拉层级（§7 NO Oversized H1s） */
+.topbar h1{font-size:23px;font-weight:700;letter-spacing:-.022em;
+  color:var(--text)}
+.topbar h1::after{content:"";display:block;width:26px;height:2px;
+  margin-top:7px;border-radius:1px;
+  background:linear-gradient(90deg,var(--aero),transparent)}
+
+/* 3. 统计行：非对称栅格（§7 NO 3-Column Card Layouts / §3 Rule 3） */
+.stat-grid{grid-template-columns:2.1fr 1fr 1fr 1fr 1fr 1fr;gap:0}
+.stat-grid>.stat-box{border-right:1px solid var(--line)}
+.stat-grid>.stat-box:first-child{padding-left:30px}
+.stat-grid>.stat-box:first-child .v{font-size:54px}
+.stat-grid .v{font-family:"Cascadia Mono",ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,"Liberation Mono",monospace;
+  font-variant-numeric:tabular-nums;letter-spacing:-.045em}
+
+/* 4. 触觉反馈（§3 Rule 5） */
+.btn:active{transform:translateY(1px) scale(.995)}
+.nav-item:active{transform:translateY(1px)}
+.btn{transition:transform .1s var(--ease),background .15s var(--ease),
+  border-color .15s var(--ease),color .15s var(--ease)}
+
+/* 5. 液态玻璃的边缘折射（§4 Liquid Glass） */
+.side,.topbar,.card{
+  box-shadow:var(--glass-shadow),
+    inset 0 1px 0 rgba(255,255,255,.55),
+    inset 0 0 0 1px rgba(255,255,255,.10)}
+@media (prefers-color-scheme: dark){
+  .side,.topbar,.card{
+    box-shadow:var(--glass-shadow),
+      inset 0 1px 0 rgba(255,255,255,.09),
+      inset 0 0 0 1px rgba(255,255,255,.04)}
+}
+
+/* 6. 状态点做"呼吸"（§4 Perpetual Micro-Interactions / MOTION_INTENSITY 6） */
+@keyframes nekoe-breathe{
+  0%,100%{opacity:1;transform:scale(1)}
+  50%{opacity:.55;transform:scale(.86)}
+}
+.dot-live{animation:nekoe-breathe 2.6s cubic-bezier(.4,0,.6,1) infinite}
+
+/* 7. 空状态：排版好一点（§3 Rule 5 Empty States） */
+.empty{display:flex;flex-direction:column;align-items:center;
+  justify-content:center;gap:9px;padding:54px 20px;text-align:center}
+.empty .big{font-size:30px;opacity:.30;line-height:1;
+  font-family:"Cascadia Mono",ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,"Liberation Mono",monospace}
+.empty .msg{font-size:12.5px;color:var(--text-3);letter-spacing:.02em}
+
+/* 12. 字体分层（不嵌字体，靠系统栈）
+   主流西文开源字体都没有中文字形，
+   所以走"平台最优栈"这条路：0 字节，中文和拉丁各自拿到本机最好的那个。
+
+   标题用 Display 变体（字重和字距更适合大字），正文用 Text 变体
+   （小字号下 hinting 更好）。这是 Win11 可变字体的一对。 */
+.topbar h1,.card-h h3,.cfg-group-title,.stat-grid .v{
+  font-family:"Segoe UI Variable Display","Segoe UI Variable Text","Segoe UI",
+    -apple-system,"PingFang SC","Noto Sans SC","Microsoft YaHei UI",
+    "Microsoft YaHei",sans-serif}
+.stat-grid .v,.metric .val,.clock,.log-line .log-ts{
+  font-family:"Cascadia Mono",ui-monospace,SFMono-Regular,Consolas,
+    "Liberation Mono",monospace;
+  font-variant-numeric:tabular-nums}
+
+/* 13. 侧栏做成深色玻璃：壁纸在上面透出来，导航用浅色字。
+      这是"启动器"最典型的一层 —— 左轨道是图，右边是内容。 */
+/* 底色不在这里给 —— 由 wall_css() 的 rgba(var(--side-rgb),var(--side-a))
+   负责。这里如果也写 background，拼接顺序上会盖掉变量版，
+   导致「侧栏玻璃颜色」和「侧栏不透明度」两个控件完全无效。 */
+.side{border-color:rgba(255,255,255,.12)}
+.side .nav-item{color:rgba(238,244,252,.80)}
+.side .nav-item:hover{background:rgba(255,255,255,.10);color:#fff}
+.side .nav-item.on{color:#fff;font-weight:650;
+  background:linear-gradient(90deg,rgba(93,168,232,.30) 0%,
+    rgba(93,168,232,.10) 62%,transparent 100%);
+  box-shadow:inset 0 0 0 1px rgba(150,205,245,.34)}
+.side .nav-item.on svg{color:#9ed4f7}
+.side .nav-item.on::before{background:#7cc4f0}
+.side .nav-section{color:rgba(226,236,248,.52)}
+.side .nav-section::after{background:rgba(255,255,255,.12)}
+.side .nav-item .badge{background:rgba(255,255,255,.16);
+  color:rgba(240,246,255,.92);border-color:rgba(255,255,255,.20)}
+.side .nav-item.on .badge{background:rgba(255,255,255,.22);color:#fff;
+  border-color:rgba(255,255,255,.28)}
+.side .nav-item .badge.alert{background:#d93a3a;color:#fff;border-color:#d93a3a}
+.side-foot{background:rgba(255,255,255,.08);
+  border-color:rgba(255,255,255,.14);color:rgba(226,236,248,.72)}
+.side-foot .dot-live{background:#4ade80}
+
+/* ========== 外观设置控件 ==========
+   参考图那套：开关 / 滑杆(带数值框) / 色板。
+   原来项目里一个都没有 —— 外观那几项只能填数字框，很难用。 */
+
+/* 设置行：左边标题+说明，右边控件 */
+/* 允许换行：放不下时控件整块折到下一行，
+   而不是把左边的标签压成一条竖线（中文会一列一个）。 */
+.set-row{display:flex;flex-wrap:wrap;align-items:center;
+  gap:12px 18px;padding:13px 0;border-bottom:1px solid var(--line)}
+/* 表单是两列栅格，横跨整行的设置项要显式跨栏，
+   否则会被塞进其中一列（画廊就踩过这个）。 */
+.set-row.full{grid-column:1/-1}
+/* 窄屏（比如窗口缩到一半）时干脆上下排：标签在上、控件在下。
+   两列挤在一起时英文数字还能忍，中文必竖排。 */
+@media (max-width: 900px){
+  .set-row{flex-direction:column;align-items:stretch;gap:8px}
+  .set-row .set-t{flex:0 0 auto}
+  .set-row .set-c{flex:0 0 auto}
+  .sld{max-width:none}
+}
+.set-row:last-child{border-bottom:0}
+/* flex-basis 给 150px：中文标签至少要这么宽才不会竖排 */
+.set-row .set-t{flex:1 1 150px;min-width:0}
+.set-row .set-t b{display:block;font-size:13px;font-weight:600;
+  color:var(--text);letter-spacing:.005em}
+.set-row .set-t span{display:block;font-size:11.5px;color:var(--text-3);
+  margin-top:3px;line-height:1.5}
+.set-row .set-c{flex:0 1 auto;min-width:0;
+  display:flex;align-items:center;gap:12px}
+
+/* 开关 */
+.sw{position:relative;width:44px;height:25px;border-radius:13px;
+  flex-shrink:0;background:var(--bg-4);border:1px solid var(--line-2);
+  cursor:pointer;transition:background .18s var(--ease),
+  border-color .18s var(--ease);-webkit-tap-highlight-color:transparent}
+.sw::after{content:"";position:absolute;top:2px;left:2px;width:19px;height:19px;
+  border-radius:50%;background:#fff;
+  box-shadow:0 1px 3px rgba(9,9,11,.28);
+  transition:transform .2s cubic-bezier(.22,.61,.36,1)}
+.sw.on{background:var(--azure);border-color:var(--azure)}
+.sw.on::after{transform:translateX(19px)}
+.sw:active::after{width:22px}
+
+/* 滑杆行 */
+/* min-width 从 300px 降到 0 —— 那个硬值会把标签挤没。
+   改用 flex-basis，够宽时照样撑满。 */
+.sld{display:flex;align-items:center;gap:13px;
+  flex:1 1 120px;min-width:0;max-width:340px}
+.sld input[type=range]{flex:1;-webkit-appearance:none;appearance:none;
+  height:4px;border-radius:2px;background:var(--bg-4);outline:none;
+  cursor:pointer;margin:0}
+.sld input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;
+  width:15px;height:15px;border-radius:50%;background:#fff;
+  border:2px solid var(--azure);cursor:pointer;
+  box-shadow:0 1px 4px rgba(9,9,11,.22);
+  transition:transform .12s var(--ease)}
+.sld input[type=range]::-webkit-slider-thumb:hover{transform:scale(1.15)}
+.sld input[type=range]::-moz-range-thumb{width:15px;height:15px;border-radius:50%;
+  background:#fff;border:2px solid var(--azure);cursor:pointer}
+.sld .v{width:58px;flex:0 0 auto;text-align:center;font-size:12px;font-weight:600;
+  padding:5px 0;border:1px solid var(--line-2);border-radius:var(--radius-xs);
+  background:var(--card-bg);color:var(--text);
+  font-family:"Cascadia Mono",ui-monospace,Consolas,monospace;
+  font-variant-numeric:tabular-nums}
+
+/* 色板 */
+.sws{display:flex;align-items:center;gap:9px;flex-wrap:wrap}
+.sws i{width:28px;height:28px;flex:0 0 auto;border-radius:9px;cursor:pointer;display:block;
+  border:2px solid transparent;box-shadow:inset 0 0 0 1px rgba(9,9,11,.14);
+  transition:transform .12s var(--ease),border-color .12s var(--ease)}
+.sws i:hover{transform:scale(1.08)}
+.sws i.sel{border-color:var(--azure);
+  box-shadow:inset 0 0 0 1px rgba(9,9,11,.14),0 0 0 3px var(--azure-soft)}
+.sws .cus{font-size:11.5px;color:var(--text-3);cursor:pointer;
+  padding:4px 9px;border:1px dashed var(--line-3);border-radius:var(--radius-xs)}
+.sws .cus:hover{color:var(--azure);border-color:var(--azure-line)}
+
+/* 关掉侧栏/内容面玻璃时的兜底：给一个近乎不透明的底。
+   不能只是"没玻璃" —— 那样文字直接压在壁纸上，读不了。 */
+body.no-side-glass .side{background:rgba(16,20,28,.985)!important;
+  backdrop-filter:none!important;-webkit-backdrop-filter:none!important}
+body.no-face-glass .topbar,
+body.no-face-glass .card{background:rgba(255,255,255,.985)!important;
+  backdrop-filter:none!important;-webkit-backdrop-filter:none!important}
+/* 深色模式下 --text 是 #d0e0f0（浅色），白底上只有 1.2:1，读不出东西。
+   这里必须跟着主题给深色兜底底，侧栏那份本来就是深色所以没这个问题。 */
+
+@media (prefers-color-scheme: dark){
+  body.no-face-glass .topbar,
+  body.no-face-glass .card{background:rgba(20,29,56,.985)!important}
+}
+
+/* ========== 取色器 ==========
+   替代原来的 prompt() 手打 hex。 */
+/* 用 fixed 而不是 absolute：admin 页 body{overflow:hidden}，
+   靠下的色板会被裁掉下半截。fixed 不受祖先 overflow 裁剪。 */
+.cp{position:fixed;z-index:200;width:236px;padding:12px;
+  background:var(--card-bg);border:1px solid var(--line-2);
+  border-radius:var(--radius-sm);box-shadow:var(--shadow-lg,0 12px 40px rgba(9,9,11,.22));
+  backdrop-filter:blur(18px) saturate(1.5);
+  -webkit-backdrop-filter:blur(18px) saturate(1.5)}
+.cp[hidden]{display:none}
+.cp-sv{position:relative;width:100%;height:150px;border-radius:var(--radius-xs);
+  cursor:crosshair;overflow:hidden;touch-action:none;
+  background:linear-gradient(to top,#000,rgba(0,0,0,0)),
+             linear-gradient(to right,#fff,var(--cp-h,#f00))}
+.cp-sv i{position:absolute;width:13px;height:13px;margin:-7px 0 0 -7px;
+  border-radius:50%;border:2px solid #fff;pointer-events:none;
+  box-shadow:0 0 0 1px rgba(0,0,0,.35),0 1px 4px rgba(0,0,0,.35)}
+.cp-hue{position:relative;height:12px;margin-top:10px;border-radius:6px;
+  cursor:pointer;touch-action:none;
+  background:linear-gradient(to right,#f00 0%,#ff0 17%,#0f0 33%,#0ff 50%,
+    #00f 67%,#f0f 83%,#f00 100%)}
+.cp-hue i{position:absolute;top:-2px;width:5px;height:16px;margin-left:-2px;
+  border-radius:3px;background:#fff;pointer-events:none;
+  box-shadow:0 0 0 1px rgba(0,0,0,.3),0 1px 3px rgba(0,0,0,.3)}
+.cp-foot{display:flex;align-items:center;gap:8px;margin-top:10px}
+.cp-prev{width:26px;height:26px;border-radius:var(--radius-xs);flex-shrink:0;
+  box-shadow:inset 0 0 0 1px rgba(9,9,11,.16)}
+.cp-hex{flex:1;min-width:0;font-family:"Cascadia Mono",ui-monospace,Consolas,monospace;
+  font-size:12px;padding:5px 8px;border:1px solid var(--line-2);
+  border-radius:var(--radius-xs);background:var(--surface-2,var(--bg-2));
+  color:var(--text)}
+.cp-dots{display:flex;flex-wrap:wrap;gap:7px;margin-top:10px}
+.cp-dots i{width:19px;height:19px;border-radius:50%;cursor:pointer;
+  box-shadow:inset 0 0 0 1px rgba(9,9,11,.16)}
+.cp-dots i:hover{transform:scale(1.14)}
+.cp-reset{margin-top:10px;width:100%;justify-content:center}
+
+/* ========== 预设壁纸画廊 ========== */
+.wall-tabs{display:flex;gap:8px;margin:2px 0 14px}
+.wall-tab{flex:1;text-align:center;padding:9px 0;font-size:12.5px;font-weight:600;
+  border:1px solid var(--line-2);border-radius:var(--radius-xs);cursor:pointer;
+  color:var(--text-2);background:transparent;
+  transition:background .16s var(--ease),border-color .16s var(--ease),
+    color .16s var(--ease)}
+.wall-tab:hover{color:var(--text);border-color:var(--line-3)}
+.wall-tab.on{background:var(--azure-soft);border-color:var(--azure-line);
+  color:var(--azure)}
+.wall-grid{display:grid;gap:12px;
+  grid-template-columns:repeat(auto-fill,minmax(136px,1fr))}
+.wall-thumb img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:block}
+  /* 不用 border 画选中环 —— 有 border 就有内边距盒，而绝对定位的
+     bottom:0 是相对内边距盒算的，底部标签永远差那 2px 露一条缝。
+     而且 overflow:hidden 会在内边距盒上裁剪，想靠 bottom:-2px 往外扩也扩不出去。
+     改成 box-shadow 画环：它不参与布局，内边距盒就是边框盒，标签能真正贴边。 */
+  .wall-thumb{position:relative;aspect-ratio:16/9;border-radius:var(--radius-sm);
+  cursor:pointer;border:0;overflow:hidden;
+  background-size:cover;background-position:center;
+  transition:transform .14s var(--ease),box-shadow .14s var(--ease)}
+.wall-thumb:hover{transform:translateY(-2px)}
+/* 选中环：内圈 2px 实线 + 外圈 3px 淡光晕。都是 box-shadow，不动布局。 */
+.wall-thumb.on{box-shadow:inset 0 0 0 2px var(--azure),
+  0 0 0 3px var(--azure-soft)}
+.wall-thumb.on::after{content:"✓";position:absolute;right:7px;bottom:7px;
+  width:19px;height:19px;border-radius:50%;background:var(--azure);
+  color:var(--on-accent);font-size:11px;font-weight:700;
+  display:flex;align-items:center;justify-content:center}
+.wall-thumb b{position:absolute;
+  /* 卡片已经没有边框了（选中环改用 box-shadow），所以 bottom:0 就是真正的底边。
+     不用再往外扩 —— 之前那样写会被 overflow:hidden 裁掉，白改。 */
+  left:0;right:0;bottom:0;
+  margin:0;padding:20px 9px 8px;
+  font-size:11px;font-weight:600;color:#fff;letter-spacing:.01em;
+  /* 实底：底部要完全不透明，中间过渡，顶部透明 ——
+     原来是 linear-gradient(transparent, rgba(0,0,0,.62))，最深处也只有
+     62% 黑，缩略图里人物的身体会从标签底下透上来，看着像"没铺满"。 */
+  background:linear-gradient(180deg,
+    rgba(0,0,0,0) 0%,
+    rgba(0,0,0,.55) 45%,
+    rgba(0,0,0,.86) 100%);
+  border-radius:0 0 var(--radius-sm) var(--radius-sm);
+  text-shadow:0 1px 3px rgba(0,0,0,.5);
+  box-sizing:border-box}
+.wall-empty{padding:22px 0;text-align:center;font-size:12.5px;
+  color:var(--text-3);border:1px dashed var(--line-3);
+  border-radius:var(--radius-sm)}
+/* ================= 手机端适配（窄屏专用） =================
+   全部包在 @media (max-width: 900px) 里 —— 宽屏打开时这些规则完全不参与。
+   这是重写版：上一版少了一个 { 多了一个 }，导致 @media 提前闭合，
+   后面的规则全被解析器丢掉，手机上看着像"没生效"。 */
+
+@media (max-width: 900px){
+
+/* ---- 1. 整体留白：竖向空间很贵 ---- */
+.app{padding:0;gap:0}
+.content{
+  padding-top:10px;
+  padding-left:max(8px, env(safe-area-inset-left));
+  padding-right:max(8px, env(safe-area-inset-right));
+  padding-bottom:calc(88px + env(safe-area-inset-bottom));
+}
+
+/* ---- 2. 侧栏：只剩图标 ----
+   真机截图确认：菜单项的 <span> 已经被隐藏（能看到图标），
+   但【分组标签】.nav-section（监控/群管理/配置/扩展）还竖着排成一列，
+   那才是"太挤"的来源 —— 这里一起隐藏。
+   原来的 .nav-item{font-size:0} 压不住带显式字号的 <span>。 */
+.side{width:52px;padding:10px 5px 8px}
+.side .brand{padding:8px 3px}
+.side .brand > :not(.ico):not(svg){display:none}
+.side .nav-section{display:none}          /* ← 分组标签，真机上竖排的就是它 */
+.side .nav-item{justify-content:center;padding:10px 0;gap:0}
+.side .nav-item > span{display:none}
+.side .nav-item .ico{width:20px;height:20px}
+.side .nav{padding:6px 4px 0}
+.side-foot{font-size:0;padding:6px 0;margin:0 6px 8px}
+.side-foot .dot-live{width:8px;height:8px}
+
+/* ---- 3. 卡片必须有不透明底色 ----
+   手机浏览器的 backdrop-filter 支持参差不齐（省电模式会主动关掉），
+   关掉之后毛玻璃变成全透明，壁纸直接透上来，字根本看不清。 */
+.card,.stat-box,.api-result,.log-box,.table-wrap{
+  background:var(--card-solid) !important;
+  backdrop-filter:none !important;
+  -webkit-backdrop-filter:none !important;
+}
+
+/* ---- 4. 统计格：两列，字号收小，别把 "2m 4…" 裁掉 ---- */
+.stat-grid{grid-template-columns:repeat(2,minmax(0,1fr)) !important;
+           gap:8px !important}
+.stat-box{padding:12px 10px !important;min-width:0 !important}
+.stat-box .v{font-size:24px !important;line-height:1.15 !important;
+             overflow-wrap:anywhere}
+.stat-box .lbl,.stat-box .sub{font-size:11px !important;
+                              white-space:normal !important}
+
+/* ---- 4.5 通用：窄屏下"横向排"的容器要能收纳 ----
+   真机截图暴露的一类问题：插件名"关键词回复"被压成一字一列，
+   "运行中/工具/群管"这些小标签也是竖排的，知识库的左右两栏挤在一起。
+   根因都一样 —— 桌面上是一行 flex 排开的，手机宽度只有一半，
+   里面的文字元素被挤到只剩一个字宽。
+
+   这里不逐个找 class（各页面命名不统一），改用通用规则：
+     · 卡片里所有容器一律允许换行（wrap 只会"允许"，不会强行改变布局）
+     · 名字/标题/说明类元素占满整行，且允许断词
+     · 标签/徽章类元素禁止逐字换行 */
+.card div,.card section,.card li,.card header,.card footer,.card p,
+.plugin-item,.plugin-card{
+  flex-wrap:wrap !important;
+}
+.card [class*="name"],.card [class*="title"],.card [class*="desc"],
+.card [class*="info"],.card h3,.card h4{
+  min-width:0 !important;
+  white-space:normal !important;
+  word-break:break-word !important;
+}
+[class*="tag"],[class*="badge"],[class*="pill"],[class*="chip"],
+[class*="state"],[class*="status"]{
+  white-space:nowrap !important;
+}
+
+/* 知识库页：桌面上是"左树 + 右操作面板"两栏，手机上必须上下堆叠，
+   否则右栏被壁纸盖住一半，按钮都点不到。 */
+#page-kb .card > div,
+#page-kb > .card > div{
+  flex-direction:column !important;
+  align-items:stretch !important;
+}
+#page-kb [class*="tree"]{max-width:100% !important;width:100% !important}
+
+/* ---- 4.7 通配 box-sizing ----
+   "宽度 100% + 左右 padding" 在默认的 content-box 下实际宽度是
+   100% + padding，必然溢出。搜索框伸出屏幕就是这个原因。
+   这条必须用通配符，逐个写会漏。 */
+*,*::before,*::after{box-sizing:border-box}
+html,body{width:100%;max-width:100%;overflow-x:hidden}
+.app,.main,.content,.page,.card,.card > *{
+  width:100% !important;
+  max-width:100% !important;
+  min-width:0 !important;
+  box-sizing:border-box !important;
+}
+/* 表单控件一律占满可用宽度，不再有"固定像素宽"的东西 */
+input,textarea,select{width:100% !important;max-width:100% !important}
+/* 表格自己滚，不要顶破外层 */
+table{max-width:100% !important}
+.table-wrap,[class*="table-wrap"],[class*="tableWrap"]{
+  width:100% !important;max-width:100% !important;
+  overflow-x:auto !important;-webkit-overflow-scrolling:touch;
+}
+
+/* ---- 4.8 最后一道防线：不许任何东西比屏幕宽 ----
+   真机截图：搜索框和表格整行都伸出屏幕右边，而整页没有横向滚动条，
+   伸出去的部分被直接裁掉 —— 表现就是"文字看不到"。
+   这里从根上堵住：页面容器不许横向溢出，能滚的只有表格自己。 */
+html,body{max-width:100%;overflow-x:hidden}
+.page,.content,.card,.main{max-width:100% !important;min-width:0 !important}
+input,textarea,select,button{
+  max-width:100% !important;
+  box-sizing:border-box !important;
+}
+/* 行内排版的东西超宽就自己滚，不要顶破外层 */
+.table-wrap,.kb-table-wrap,[class*="table-wrap"]{
+  overflow-x:auto !important;-webkit-overflow-scrolling:touch;
+  max-width:100% !important;
+}
+
+/* ---- 5. 表格：横向滑动，别把页面撑破 ---- */
+table{display:block;overflow-x:auto;white-space:nowrap;
+      -webkit-overflow-scrolling:touch;max-width:100%}
+thead,tbody{display:table;width:100%;min-width:max-content}
+th,td{padding:8px 10px;font-size:13px}
+
+/* ---- 6. 顶部 tab：同样横向滑动 ---- */
+.tabs,.tab-bar,.seg{overflow-x:auto;overflow-y:hidden;
+                    flex-wrap:nowrap !important;
+                    -webkit-overflow-scrolling:touch}
+.tabs > *,.tab-bar > *,.seg > *{flex:0 0 auto;white-space:nowrap}
+
+/* ---- 7. 触摸目标 ---- */
+.btn,button,.nav-item,input[type=submit]{min-height:42px}
+.btn.sm{min-height:36px;padding:8px 12px}
+.btn svg,.btn .ico{pointer-events:none}
+
+/* ---- 8. 输入框字号必须 >=16px ----
+   iOS Safari 在 <16px 的输入框聚焦时会自动放大整个页面。 */
+input,select,textarea{font-size:16px !important}
+
+/* ---- 9. 表单和卡片 ---- */
+.card{padding:14px 12px}
+.form-grid{grid-template-columns:1fr !important}
+
+/* ---- 10. 悬浮按钮别盖住最后一行 ---- */
+.fab-bar{right:10px;bottom:calc(10px + env(safe-area-inset-bottom));
+         padding:5px;border-radius:10px}
+
+/* ---- 11. 弹窗占满 ---- */
+.modal,.dialog{width:auto !important;max-width:none !important;
+               margin:8px;max-height:92vh;overflow-y:auto}
+
+/* ---- 12. 日志：真机上被挤成一条窄柱 ----
+   日志行是「时间 | 级别 | 正文」三栏排的，时间戳和级别占了固定宽度，
+   手机上正文只剩一小条，一句话被拆成四五行，看着像"字丢了"。
+   这里把每一行改成竖排：时间+级别一行，正文自己占满一行。 */
+.log-box,.logs{font-size:12px !important;line-height:1.55 !important}
+.log-line,.log-row,.logitem,li.log{
+  display:block !important;
+  white-space:normal !important;
+  word-break:break-word !important;
+  padding:7px 9px !important;
+  line-height:1.55 !important;
+}
+/* 行内的几栏各自占满，别再横向挤。
+   这里是通用写法 —— 不用知道里面到底叫什么 class：
+   前几栏（时间/级别）按内容宽，最后一栏（正文）强制占满一行。 */
+.log-line > *,.log-row > *{display:inline !important;margin-right:6px}
+.log-line,.log-row{display:flex !important;flex-wrap:wrap !important;
+                   align-items:baseline !important;gap:2px 6px !important}
+.log-line > *:last-child,.log-row > *:last-child{
+  flex:1 1 100% !important;display:block !important;margin-right:0 !important;
+  white-space:pre-wrap !important;word-break:break-word !important}
+.log-time,.log-lv,.log-level{font-size:11px !important;opacity:.75}
+.log-msg,.log-text,.log-content{display:block !important;
+                                margin-top:2px;
+                                white-space:pre-wrap !important;
+                                word-break:break-word !important}
+pre,code{font-size:12px !important}
+
+/* ---- 13. 标题省空间 ---- */
+.page-title,.content > h1{font-size:17px;margin:4px 0 10px}
+
+/* ---- 14. 长文本别撑宽 ---- */
+pre,code{white-space:pre-wrap;word-break:break-word}
+img,video,svg,canvas{max-width:100%;height:auto}
+.page,.content > *{min-width:0;max-width:100%}
+
+}
+
+/* 卡片底色。浅色和暗色都要定义 —— 只定义一边的话，另一边
+   var(--card-solid) 取不到值，整条 background 声明会被判为无效，
+   卡片就变成透明的，壁纸直接透上来。 */
+:root{--card-solid:rgba(255,255,255,.97)}
+@media (prefers-color-scheme: dark){
+  :root{--card-solid:rgba(24,27,34,.97)}
+}
+
+/* 小屏（分屏 / 老手机）再收一档 */
+@media (max-width: 420px){
+  .side{width:46px}
+  .content{padding-left:8px;padding-right:8px}
+}
+
+/* ========== 模型名候选框（自绘下拉） ==========
+   原生 datalist 弹层由浏览器绘制，页面样式够不着（WebView2 按系统配色画成纯黑圆角块，
+   只有一项时还带一个指向上方的尖角），跟这套玻璃主题完全不搭。
+   这里换成自绘弹层：配色全部走主题变量，浅色/深色都跟着变。
+   弹层是 position:fixed 且挂到 body 上 —— 卡片的 backdrop-filter 会成为 fixed 的
+   包含块（留在原地会错位），body{overflow:hidden} 又会把 absolute 裁掉。 */
+.mcombo{position:relative;flex:1 1 auto;min-width:0;display:flex;align-items:center}
+.mcombo>input{width:100%;padding-right:34px}
+.mcombo-btn{position:absolute;right:3px;top:50%;transform:translateY(-50%);
+  width:26px;height:26px;display:flex;align-items:center;justify-content:center;
+  padding:0;border:0;background:transparent;color:var(--text-3);
+  border-radius:var(--radius-xs);cursor:pointer;
+  transition:background .14s,color .14s}
+.mcombo-btn:hover{background:var(--hover);color:var(--text)}
+.mcombo-btn svg{transition:transform .16s ease}
+.mcombo.open .mcombo-btn{color:var(--text)}
+.mcombo.open .mcombo-btn svg{transform:rotate(180deg)}
+
+/* z-index 要压过页面里的遮罩/弹窗层：取色器是 200、modal 是 300，
+   下拉面板给 900 —— 之前用 150，只要页面上有遮罩层，面板就被压在下面，
+   表现就是"点了没反应/直接穿过去"。 */
+.mcombo-pop{position:fixed;z-index:900;max-height:300px;overflow-y:auto;
+  overscroll-behavior:contain;padding:5px;
+  /* 面层必须用 --card-bg + 毛玻璃，不能用 --bg-2：
+     开了壁纸之后主题会把面层 token 调成半透明玻璃色（卡片靠 backdrop-filter
+     才看得清），直接拿它当弹层底色 = 半透明，下面的正文会"穿"上来。 */
+  background:var(--card-bg,#fff);
+  -webkit-backdrop-filter:blur(20px) saturate(1.5);
+  backdrop-filter:blur(20px) saturate(1.5);
+  /* 弹层和卡片都是浅色玻璃，靠描边 + 投影把两层分开（不然像印在卡片上） */
+  border:1px solid var(--line-3);
+  border-radius:var(--radius-s);
+  box-shadow:var(--shadow-xl),0 0 0 1px rgba(10,14,26,.04);
+  /* 开关只用 visibility：不用 display:none 也不加过渡。
+     display:none 是"从无到有"，元素要重新参与布局；visibility 只切可见性，
+     元素一直留在布局里，展开/收起都没有中间态。
+     也不用 opacity 过渡 —— 可见性一旦依赖过渡结束才成立就会变脆
+     （渲染节流/虚拟时间下过渡不推进时，弹层会永远停在透明状态）。 */
+  visibility:hidden}
+.mcombo-pop.show{visibility:visible}
+.mcombo-opt{padding:8px 10px;border-radius:var(--radius-xs);
+  font-size:13px;line-height:1.4;color:var(--text-2);
+  cursor:pointer;word-break:break-all;transition:background .12s,color .12s}
+.mcombo-opt b{color:var(--text);font-weight:650}
+.mcombo-opt:hover{background:var(--hover);color:var(--text)}
+.mcombo-opt.on{background:var(--blue-soft);color:var(--blue)}
+.mcombo-opt.on b{color:var(--blue)}
+.mcombo-empty{padding:10px;font-size:12px;line-height:1.7;color:var(--text-4)}
+
+@media (prefers-color-scheme: dark){
+  /* 深色下 --bg-2 和卡片同色，"浮起来"只能靠边框与投影说明 */
+  .mcombo-pop{border-color:var(--line-3)}
+}
+
+/* 模型输入框旁边那两个动作按钮（重新拉取 / 测试）。
+   原来是裸 <button>，主题又把按钮底色去掉了，看起来像两段普通文字，
+   根本看不出能点。这里给回明确的按钮形状，但保持次级、不抢主按钮。 */
+.mcombo-act{flex:0 0 auto;font-size:12px;line-height:1;padding:7px 11px;min-height:0;
+  white-space:nowrap;border:1px solid var(--line-2);border-radius:var(--radius-xs);
+  background:var(--bg-2);color:var(--text-2);cursor:pointer;
+  transition:background .14s,border-color .14s,color .14s}
+.mcombo-act:hover{background:var(--hover);border-color:var(--line-3);color:var(--text)}
+.mcombo-act:active{transform:translateY(.5px)}
+.mcombo-act:disabled,.mcombo-act[disabled]{opacity:.55;cursor:default;transform:none}
+
+/* ================= 观感修整（1.0.5.2） =================
+   背景换成玻璃 + 壁纸之后，一批「靠底色区分」的中性色全糊成一片：
+   --text-4(#c3c9d9) 的小字在白玻璃上像污渍，--bg-4 的标签没有底。
+   这里不改配色体系，只把这几处对比度和尺度按新背景重新调。 */
+
+/* 1) 卡片标题后面的英文小标签（Live / Plugins / Persona …）。
+      原来用 --text-4，在毛玻璃上几乎只剩一团灰影，看着像标题旁边的污渍。
+      改成可读的次级色，并在前面加一个小圆点当分隔。 */
+.card-h .en{color:var(--text-3);opacity:.9;letter-spacing:.13em;
+  position:relative;padding-left:10px}
+.card-h .en::before{content:"";position:absolute;left:0;top:50%;
+  width:3px;height:3px;border-radius:50%;background:currentColor;
+  opacity:.5;transform:translateY(-50%)}
+
+/* 2) 概览顶部那排数字：42px（首格 54px）在宽屏下太抢眼，
+      三个格子都是 0 的时候整排像三个大窟窿。
+      收小、减弱字距，标签更贴近数字；格子内边距也一并收紧。 */
+.stat-grid .v{font-size:26px;letter-spacing:-.02em}
+.stat-grid>.stat-box:first-child .v{font-size:30px}
+.stat-grid .l{margin-top:5px;font-size:11px;letter-spacing:.08em}
+.stat-grid>.stat-box{padding:15px 18px}
+.stat-grid>.stat-box:first-child{padding-left:22px}
+
+/* 3) 日志等级标签：info 用 --bg-4 打底，在玻璃卡片上几乎没有底色，
+      结果一行行里 INFO 像纯文字、OK/WARN/ERR 是药丸，视觉上对不齐。
+      给中性标签补内描边并统一最小宽度，让整列左缘对齐。 */
+.log-tag{display:inline-block;min-width:40px;text-align:center}
+.log-tag.info{background:var(--bg-3);color:var(--text-2);
+  box-shadow:inset 0 0 0 1px var(--line-2)}
+
+/* 4) 设置类页面：单行输入框被拉成一千多像素一条，
+      「none」这种值待在一个巨长的框里，读起来像表格没做完。
+      只限制 .form-row 的直接子级单行控件；textarea 继续占满（长文本需要宽度）。 */
+.form-row>input,.form-row>select{max-width:640px}
+.form-row>textarea{max-width:100%}
+
+/* 5) 右下角那组悬浮保存按钮会压住表单最后一行（截图里"短期上下文轮数"被盖住）。
+      给滚动区留出它占的高度，别让内容钻到按钮底下。 */
+.content{padding-bottom:118px}
+
+/* 6) 设置类页面：单行输入框被拉到一千多像素，值（比如 none）待在一个巨长的框里，
+      读起来像表格没做完。整行一起收窄（标签和控件才对齐）；
+      .full 行原来想保留整宽，但真正宽得离谱的恰恰是这些 full 文本行，
+      所以一视同仁收到 760px —— textarea 在这个宽度里也够用。 */
+.form-grid>.form-row{max-width:760px}
+
+/* 7) 「1m 52s」这种时间在窄格子里会被折成两行，禁止换行。 */
+.stat-grid .v{white-space:nowrap}
+
+/* 8) 数字收小之后，数字和标签之间空出一大截（原来靠 42px 的字撑开）。
+      改成垂直居中 + 小间距，格子多高都不会散。 */
+.stat-grid>.stat-box{display:flex;flex-direction:column;justify-content:center;gap:6px}
+.stat-grid .l{margin-top:0}
+
+/* ================= 9) 原生 select → 自绘下拉 =================
+   原生弹层由系统绘制（灰底白字），样式够不着。这里保留原生 <select> 当数据源
+   （CSS 藏起来），上面盖一个自绘按钮 + 面板，复用模型候选框那套 .mcombo-pop
+   面板样式，配色全部走主题变量，浅色/深色都跟。 */
+.cbo{position:relative;display:inline-block;vertical-align:middle;min-width:140px;max-width:100%}
+.form-row .cbo,.form-grid .cbo{display:block;max-width:640px}
+.cbo-btn{display:flex;align-items:center;justify-content:space-between;gap:8px;width:100%;
+  padding:11px 14px;font-family:inherit;font-size:13.5px;line-height:1.2;text-align:left;
+  cursor:pointer;color:var(--text);background:var(--card-bg);
+  border:1px solid var(--line-2);border-radius:var(--radius-s);
+  transition:border-color .14s,box-shadow .14s}
+.cbo-btn:hover{border-color:var(--line-3)}
+.cbo-btn:disabled{opacity:.55;cursor:default}
+.cbo.open .cbo-btn{border-color:var(--blue);box-shadow:0 0 0 3px var(--blue-soft)}
+.cbo-btn svg{flex:0 0 auto;color:var(--text-3);transition:transform .16s}
+.cbo.open .cbo-btn svg{transform:rotate(180deg)}
+.cbo-lbl{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cbo-pop .mcombo-opt{display:flex;align-items:center;gap:8px}
+.cbo-pop .mcombo-opt.on::after{content:"✓";margin-left:auto;font-size:11px;opacity:.85}
+/* 原生 select 必须用 !important 藏：代码里还有拿 style.display 控制显隐的地方，
+   那个显示意图由 _cboVis() 转给 .cbo 包裹层。 */
+select[data-cbo]{display:none!important}
+
+/* ================= 10) 插件卡片：三列并排的竖版卡 =================
+   卡片里现在有四块（标题 / 描述 / 元信息 / 操作），窄卡片下必须竖排：
+   按钮留在标题行会把插件名挤成省略号，所以统一挪到底部右对齐。 */
+#pluginList,#marketList{display:grid;grid-template-columns:repeat(auto-fill,minmax(330px,1fr));
+  gap:12px;align-items:stretch}
+#pluginList>.plug-card,#marketList>.plug-card{display:flex;flex-direction:column;min-width:0}
+.plug-head{display:block}
+.plug-title{flex-wrap:wrap;row-gap:6px}
+/* 描述最多三行，卡片高度才不会参差 */
+.plug-desc{display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
+.plug-meta{font-size:11px;line-height:1.7}
+.plug-actions{margin-top:auto;padding-top:10px;display:flex;gap:6px;
+  justify-content:flex-end;flex-wrap:wrap;flex-shrink:0}
+.plug-actions .btn{padding:6px 11px;font-size:12px}
+/* 三列时按钮小一号，四个按钮也放得下 */
+@media (max-width:1180px){
+  #pluginList,#marketList{grid-template-columns:repeat(auto-fill,minmax(300px,1fr))}
+}
+
+/* ================= 11) 手机 App 化（<=720px） =================
+   721~900px 还是原来的图标栏；<=720px 换成「抽屉 + 底部 Tab」：
+   一条 70px 的图标柱在真机上既看不清也点不准，而且底部 Tab 才是 App 的习惯。 */
+.nav-toggle{display:none;align-items:center;justify-content:center;width:38px;height:38px;
+  flex:0 0 auto;border-radius:10px;border:1px solid var(--line-2);
+  background:var(--card-bg);color:var(--text-2);cursor:pointer}
+.mtab{display:none;position:fixed;left:0;right:0;bottom:0;z-index:70;
+  background:var(--card-bg);border-top:1px solid var(--line);
+  padding:6px 6px calc(6px + env(safe-area-inset-bottom));
+  -webkit-backdrop-filter:blur(18px) saturate(1.5);
+  backdrop-filter:blur(18px) saturate(1.5)}
+.mtab a{flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;
+  padding:6px 2px;border-radius:10px;color:var(--text-3);text-decoration:none;
+  font-size:10.5px;line-height:1.15;cursor:pointer;user-select:none}
+.mtab a.on{color:var(--blue);background:var(--blue-soft)}
+.mtab a svg{width:20px;height:20px;stroke-width:1.9}
+.nav-mask{position:fixed;inset:0;background:rgba(8,12,24,.42);z-index:89;
+  opacity:0;pointer-events:none;transition:opacity .18s}
+body.nav-open .nav-mask{opacity:1;pointer-events:auto}
+
+@media (max-width:720px){
+  .side{position:fixed;left:0;top:0;bottom:0;width:252px;max-width:82vw;
+    padding:18px 12px 14px;transform:translateX(-103%);
+    transition:transform .22s ease;z-index:90;
+    box-shadow:0 12px 44px rgba(8,12,24,.38)}
+  body.nav-open .side{transform:none}
+  .main{margin-left:0;width:100%}
+  .topbar{padding:10px 12px}
+  .nav-toggle{display:inline-flex}
+  .mtab{display:flex}
+  .content{padding:12px 12px calc(88px + env(safe-area-inset-bottom))}
+  .fab-bar{right:12px;bottom:calc(88px + env(safe-area-inset-bottom))}
+  /* 手指比鼠标粗：可点目标统一抬高 */
+  .btn{min-height:40px;padding:9px 14px}
+  .btn.sm{min-height:34px;padding:6px 11px}
+  .nav-item{min-height:44px}
+  /* 表格给个最小宽度，让它在卡片里横向滚，别把整页顶宽 */
+  .tbl{min-width:520px}
+  .table-wrap,.kb-wrap,.cl-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch}
+}
+
+/* 触屏没有 hover：原来靠 :hover 才显形的按钮在手机上永远点不到（真 bug） */
+@media (hover:none){
+  .mem-row .btn,.group-head .btn,.mem-user-head .btn{opacity:1!important}
+}
+
+/* 触屏反馈：去掉蓝色高亮方块，顺手消掉双击缩放延迟 */
+@media (pointer:coarse){
+  a,button,.nav-item,.mtab a{-webkit-tap-highlight-color:transparent;
+    touch-action:manipulation}
+}
+
+/* 手机顶栏那排小指标（模型/记忆/黑名单/运行）在 390px 下会被切掉半截；
+   概览页本来就有同样数字的大卡片，手机上直接不显示。 */
+@media (max-width:720px){
+  .top-metrics{display:none}
+}
+
+/* ===== 12) 版本更新弹窗（重做） =====
+   原来三个"选择线路"卡片占掉半屏、延迟全标红、进度条只有一条灰杠配 0 / 0。
+   现在：线路单列紧凑 + 延迟按阈值分色 + 最快那条挂角标；进度改成独立卡片，
+   百分比单独放大，下面给「已下载 / 总量 · 速度 · 剩余」。 */
+#updLines{display:flex;flex-direction:column;gap:8px}
+.upd-line{position:relative;display:flex;align-items:center;gap:10px;width:100%;
+  padding:11px 13px;border-radius:10px;border:1px solid var(--line-2);
+  background:var(--card-bg);cursor:pointer;text-align:left;
+  transition:border-color .15s,background .15s}
+.upd-line:hover{border-color:var(--line-3)}
+.upd-line.on{border-color:var(--blue);background:var(--blue-soft)}
+.upd-line .nm{flex:1;min-width:0;font-size:13px;color:var(--text);
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.upd-line .ms{flex:0 0 auto;min-width:58px;text-align:center;padding:3px 9px;
+  border-radius:6px;font-size:11.5px;font-weight:600;font-variant-numeric:tabular-nums}
+.upd-line .ms.fast{background:var(--green-soft);color:var(--green)}
+.upd-line .ms.mid{background:var(--amber-soft);color:var(--amber)}
+.upd-line .ms.bad{background:var(--red-soft);color:var(--red)}
+.upd-line .ms.wait{background:var(--bg-4);color:var(--text-2);font-weight:500}
+.upd-line.best::after{content:"最快";position:absolute;top:-7px;right:11px;
+  padding:1px 7px;border-radius:20px;font-size:10px;line-height:1.5;
+  background:var(--blue);color:#fff}
+
+.upd2-frow{display:flex;align-items:center;gap:10px;padding:10px 12px;margin-bottom:8px;
+  border:1px solid var(--line-2);border-radius:10px;background:var(--card-bg)}
+.upd2-tag{flex:0 0 auto;padding:3px 8px;border-radius:6px;font-size:10.5px;font-weight:600;
+  background:var(--bg-4);color:var(--text-2)}
+.upd2-tag.main{background:var(--blue-soft);color:var(--blue)}
+.upd2-frow .fi{flex:1;min-width:0}
+.upd2-frow .fn{display:block;font-size:13px;color:var(--text);
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.upd2-frow .fs{display:block;margin-top:2px;font-size:11.5px;color:var(--text-3);
+  font-variant-numeric:tabular-nums}
+.upd2-frow .upd-dl{flex:0 0 auto;padding:5px 13px;border-radius:8px;font-size:12.5px;
+  border:1px solid var(--line-2);background:var(--card-bg);color:var(--text);cursor:pointer}
+.upd2-frow .upd-dl:hover{border-color:var(--blue);color:var(--blue)}
+.upd2-frow .upd-dl:disabled{opacity:.45;cursor:default}
+
+.upd2-prog{margin-top:16px;padding:14px;border-radius:12px;
+  border:1px solid var(--line-2);background:var(--bg-2)}
+.upd2-ph{display:flex;align-items:baseline;justify-content:space-between;gap:10px;margin-bottom:10px}
+.upd2-state{font-size:12.5px;color:var(--text-2)}
+.upd2-pct{font-size:22px;font-weight:700;line-height:1;color:var(--text);
+  font-variant-numeric:tabular-nums}
+.upd2-bar{position:relative;height:10px;border-radius:99px;background:var(--bg-4);overflow:hidden}
+.upd2-bar>i{display:block;height:100%;width:0;border-radius:99px;
+  background:linear-gradient(90deg,var(--blue),#6aa9ff);transition:width .25s ease}
+.upd2-bar.busy>i{background-image:repeating-linear-gradient(45deg,
+  rgba(255,255,255,.28) 0 6px,transparent 6px 12px),
+  linear-gradient(90deg,var(--blue),#6aa9ff);
+  background-size:24px 100%,100% 100%;animation:updStripes 1s linear infinite}
+@keyframes updStripes{from{background-position:0 0,0 0}to{background-position:24px 0,0 0}}
+.upd2-meta{display:flex;flex-wrap:wrap;gap:4px 16px;margin-top:9px;
+  font-size:11.5px;color:var(--text-3);font-variant-numeric:tabular-nums}
+.upd2-acts{display:flex;gap:8px;margin-top:10px}
+@media (max-width:720px){
+  .upd2-pct{font-size:19px}
+  .upd2-frow{flex-wrap:wrap}
+}
+/* 更新弹窗：更宽（线路/文件/进度要能一屏看到），说明默认折叠 */
+#updMask .modal{width:min(780px,100%)}
+.upd-notes.clamp{max-height:132px;overflow:hidden;position:relative}
+.upd-notes.clamp::after{content:"";position:absolute;left:0;right:0;bottom:0;height:38px;
+  background:linear-gradient(transparent,var(--card-bg))}
+.upd-more{margin-top:8px;display:inline-flex;align-items:center;gap:6px;padding:4px 11px;
+  border-radius:7px;border:1px solid var(--line-2);background:var(--card-bg);
+  color:var(--text-2);font-size:11.5px;cursor:pointer;font-family:inherit}
+.upd-more:hover{border-color:var(--blue);color:var(--blue)}
+.upd-line .ms{min-width:64px;white-space:nowrap}

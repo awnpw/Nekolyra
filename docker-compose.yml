@@ -1,0 +1,40 @@
+# Nekolyra —— docker compose
+#
+#   docker compose up -d
+#   然后浏览器开 http://127.0.0.1:8080/admin
+#
+# 第一次启动会在 ./data 里生成 config.json 并打印管理员 token —— 用
+# `docker compose logs nekolyra` 能看到。
+
+services:
+  nekolyra:
+    build: .
+    image: nekolyra:1.0.5.0
+    container_name: nekolyra
+    restart: unless-stopped
+
+    ports:
+      # ★ 只有一个端口。管理界面和 OneBot v11 都在它上面：
+      #     管理界面      http://<host>:8080/admin
+      #     OneBot v11    ws://<host>:8080/onebot/v11/ws
+      #
+      #   ★ 协议端是**反向**连过来的（NapCat「WebSocket 客户端」填上面那个 ws 地址），
+      #     机器人这边**不开正向 WS**，所以没有第二个端口。
+      #     这里以前写着 "8081:8081 正向 WebSocket" —— 那是错的，8081 没人监听。
+      - "8080:8080"
+
+    volumes:
+      # 数据全在这儿：聊天记录、长期记忆、知识库、表情库、备份
+      - ./data:/app/data
+      # 配置。第一次启动会自动生成，不用提前创建
+      - ./config.json:/app/config.json
+
+    environment:
+      - TZ=Asia/Shanghai
+
+    # 记忆分析和知识库检索都是 SQLite 本地操作，不占多少资源；
+    # 主要开销在等 AI 接口返回，所以给 512M 够了。
+    deploy:
+      resources:
+        limits:
+          memory: 512M

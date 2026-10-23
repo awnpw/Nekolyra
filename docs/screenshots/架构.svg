@@ -1,0 +1,118 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1080" height="700" viewBox="0 0 1080 700" font-family="system-ui, -apple-system, 'Segoe UI', 'Microsoft YaHei', sans-serif">
+  <defs>
+    <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#8b93a8"/>
+    </marker>
+    <linearGradient id="glass" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.96"/>
+      <stop offset="100%" stop-color="#f4f7fc" stop-opacity="0.96"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="1080" height="700" fill="#f7f9fd"/>
+  <text x="40" y="48" font-size="22" font-weight="700" fill="#0a0e1a">Nekolyra 架构</text>
+  <text x="40" y="72" font-size="13" fill="#7b8299">全部在本机运行 · 数据落在 data/ · 管理界面走本地 HTTP + 原生窗口</text>
+
+  <!-- 外部：QQ 与协议端 -->
+  <g>
+    <rect x="40" y="110" width="200" height="76" rx="12" fill="url(#glass)" stroke="#dde1ee"/>
+    <text x="60" y="140" font-size="15" font-weight="600" fill="#0a0e1a">QQ</text>
+    <text x="60" y="162" font-size="12" fill="#7b8299">群聊 / 私聊</text>
+
+    <rect x="40" y="212" width="200" height="86" rx="12" fill="url(#glass)" stroke="#dde1ee"/>
+    <text x="60" y="242" font-size="15" font-weight="600" fill="#0a0e1a">NapCat / LLOneBot</text>
+    <text x="60" y="262" font-size="12" fill="#7b8299">OneBot v11 协议端</text>
+    <text x="60" y="282" font-size="12" fill="#4e556b">反向 WS → 127.0.0.1:8080</text>
+
+    <path d="M140,186 L140,212" stroke="#8b93a8" stroke-width="1.6" marker-end="url(#a)"/>
+    <text x="152" y="203" font-size="11" fill="#7b8299">消息</text>
+  </g>
+
+  <!-- 主程序 -->
+  <g>
+    <rect x="300" y="110" width="470" height="188" rx="14" fill="url(#glass)" stroke="#cfd5e6"/>
+    <text x="322" y="140" font-size="16" font-weight="700" fill="#0a0e1a">bot.py　主程序</text>
+    <text x="322" y="160" font-size="12" fill="#7b8299">nonebot2 + OneBot v11 适配器</text>
+
+    <rect x="322" y="176" width="426" height="34" rx="8" fill="#eef4ff" stroke="#d6e2ff"/>
+    <text x="336" y="198" font-size="12.5" fill="#2557c7">触发判断 → 上下文组装 → 规划 → 生成 → 输出</text>
+
+    <rect x="322" y="220" width="132" height="60" rx="10" fill="#ffffff" stroke="#e3e8f3"/>
+    <text x="336" y="244" font-size="12.5" font-weight="600" fill="#0a0e1a">长期记忆</text>
+    <text x="336" y="264" font-size="11" fill="#7b8299">SQLite</text>
+
+    <rect x="466" y="220" width="132" height="60" rx="10" fill="#ffffff" stroke="#e3e8f3"/>
+    <text x="480" y="244" font-size="12.5" font-weight="600" fill="#0a0e1a">知识库</text>
+    <text x="480" y="264" font-size="11" fill="#7b8299">条目 / 文件夹 / 去重</text>
+
+    <rect x="610" y="220" width="138" height="60" rx="10" fill="#ffffff" stroke="#e3e8f3"/>
+    <text x="624" y="244" font-size="12.5" font-weight="600" fill="#0a0e1a">表情库</text>
+    <text x="624" y="264" font-size="11" fill="#7b8299">识图打标 → 按情绪挑</text>
+
+    <path d="M240,255 L300,255" stroke="#8b93a8" stroke-width="1.6" marker-end="url(#a)"/>
+    <text x="246" y="247" font-size="11" fill="#7b8299">WS</text>
+  </g>
+
+  <!-- 右侧：AI / 语音 -->
+  <g>
+    <rect x="820" y="110" width="220" height="120" rx="12" fill="url(#glass)" stroke="#dde1ee"/>
+    <text x="840" y="140" font-size="15" font-weight="600" fill="#0a0e1a">AI 后端</text>
+    <text x="840" y="162" font-size="12" fill="#7b8299">OpenAI 兼容 / DeepSeek / 智谱</text>
+    <text x="840" y="182" font-size="12" fill="#7b8299">流式 · 限流 · 换模型</text>
+    <text x="840" y="202" font-size="12" fill="#7b8299">视觉模型（识图/打标）</text>
+    <path d="M770,168 L820,168" stroke="#8b93a8" stroke-width="1.6" marker-end="url(#a)"/>
+
+    <rect x="820" y="250" width="220" height="104" rx="12" fill="url(#glass)" stroke="#dde1ee"/>
+    <text x="840" y="280" font-size="15" font-weight="600" fill="#0a0e1a">语音（可选）</text>
+    <text x="840" y="302" font-size="12" fill="#7b8299">IndexTTS / CosyVoice2</text>
+    <text x="840" y="322" font-size="12" fill="#7b8299">HTTP · 音色 · 情绪映射</text>
+    <path d="M770,302 L820,302" stroke="#8b93a8" stroke-width="1.6" marker-end="url(#a)"/>
+  </g>
+
+  <!-- 插件运行时 -->
+  <g>
+    <rect x="300" y="336" width="470" height="106" rx="14" fill="url(#glass)" stroke="#cfd5e6"/>
+    <text x="322" y="366" font-size="16" font-weight="700" fill="#0a0e1a">插件运行时</text>
+    <text x="322" y="386" font-size="12" fill="#7b8299">data/plugins/*&#47;main.py　热加载 · 命令 / 消息钩子 / 自带管理页 · 权限隔离</text>
+    <rect x="322" y="398" width="90" height="28" rx="7" fill="#eef4ff"/>
+    <text x="336" y="417" font-size="11.5" fill="#2557c7">签到积分</text>
+    <rect x="420" y="398" width="72" height="28" rx="7" fill="#eef4ff"/>
+    <text x="434" y="417" font-size="11.5" fill="#2557c7">群报</text>
+    <rect x="500" y="398" width="72" height="28" rx="7" fill="#eef4ff"/>
+    <text x="514" y="417" font-size="11.5" fill="#2557c7">抽奖</text>
+    <rect x="580" y="398" width="90" height="28" rx="7" fill="#eef4ff"/>
+    <text x="594" y="417" font-size="11.5" fill="#2557c7">广告拦截</text>
+    <rect x="678" y="398" width="72" height="28" rx="7" fill="#eef4ff"/>
+    <text x="692" y="417" font-size="11.5" fill="#2557c7">…</text>
+    <path d="M535,298 L535,336" stroke="#8b93a8" stroke-width="1.6" marker-end="url(#a)"/>
+  </g>
+
+  <!-- 管理界面 -->
+  <g>
+    <rect x="300" y="482" width="470" height="116" rx="14" fill="url(#glass)" stroke="#cfd5e6"/>
+    <text x="322" y="512" font-size="16" font-weight="700" fill="#0a0e1a">Web 管理台</text>
+    <text x="322" y="532" font-size="12" fill="#7b8299">FastAPI 路由 + 单页前端，原生窗口（pywebview）打开</text>
+    <text x="322" y="552" font-size="12" fill="#4e556b">127.0.0.1:PORT/admin?token=…　所有接口都要 token</text>
+    <text x="322" y="574" font-size="12" fill="#7b8299">概览 / 插件 / 记忆 / 知识库 / 表情库 / 人格 / 语音 / 配置 / 更新</text>
+    <path d="M535,442 L535,482" stroke="#8b93a8" stroke-width="1.6" marker-end="url(#a)"/>
+  </g>
+
+  <!-- 数据落盘 -->
+  <g>
+    <rect x="40" y="336" width="200" height="262" rx="12" fill="url(#glass)" stroke="#dde1ee"/>
+    <text x="60" y="366" font-size="15" font-weight="600" fill="#0a0e1a">本地数据 data/</text>
+    <text x="60" y="392" font-size="12" fill="#4e556b">bot.db（SQLite）</text>
+    <text x="72" y="410" font-size="11.5" fill="#7b8299">记忆 · 聊天记录 · 学签</text>
+    <text x="60" y="436" font-size="12" fill="#4e556b">plugins/</text>
+    <text x="72" y="454" font-size="11.5" fill="#7b8299">插件源码与配套资源</text>
+    <text x="60" y="480" font-size="12" fill="#4e556b">stickers/</text>
+    <text x="72" y="498" font-size="11.5" fill="#7b8299">表情图（按 hash 命名）</text>
+    <text x="60" y="524" font-size="12" fill="#4e556b">config.json</text>
+    <text x="72" y="542" font-size="11.5" fill="#7b8299">全部配置（含 Key，注意保密）</text>
+    <text x="60" y="572" font-size="11.5" fill="#b45309">切代理 / 备份 = 拷整个文件夹</text>
+    <path d="M240,430 L300,430" stroke="#8b93a8" stroke-width="1.6" marker-end="url(#a)"/>
+  </g>
+
+  <text x="40" y="672" font-size="11.5" fill="#9aa1b4">说明：AI / 语音 / 协议端都在本机或你自己填的地址上，不经过第三方中转；关掉窗口进程即退出。</text>
+</svg>

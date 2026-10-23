@@ -1,0 +1,45 @@
+# 本地配置与数据（含 API Key，绝不入库）
+config.json
+config.json.*
+.env
+data/*
+!data/.gitkeep
+!data/plugins/
+!data/plugins/**
+
+# 构建产物与中间目录
+build/
+dist/
+dist_launcher/
+build_launcher/*/
+*.spec.bak
+*.pycprobe
+*.log
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# 本地备份与临时文件
+*.bak
+*.bak_*
+*.copy
+*.old_*
+*.prev
+_ui_backups/
+
+# 截图用的浏览器配置目录（含浏览记录，绝不入库）
+_shots_profile/
+*.py.p
+# 开发/发布用脚本：本地保留，不随仓库发布
+/_bootstrap_pip.py
+/_build_guard.py
+/_check_html.py
+/_check_refs.py
+/_check_ui.py
+/_fulltest.py
+/_redo.py
+/_ship.py
+/_sign_release.py

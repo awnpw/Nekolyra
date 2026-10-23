@@ -1,0 +1,28 @@
+{
+    "name": "daily",
+    "display_name": "晨昏播报",
+    "version": "1.0.1",
+    "author": "Nekolyra",
+    "description": "每天早晚各播报一次：问候 + 天气 + 可选语音；可指定群或全群广播，管理员可手动触发。",
+    "entry": "main.py",
+    "tags": [
+        "实用",
+        "定时",
+        "语音"
+    ],
+    "defaults": {
+        "dg_enabled": true,
+        "dg_morning": "08:00",
+        "dg_evening": "23:30",
+        "dg_city": "",
+        "dg_weather": false,
+        "dg_voice": false,
+        "dg_ai_line": true,
+        "dg_groups": "",
+        "dg_tts_url": "http://127.0.0.1:7871/v1/audio/speech",
+        "dg_tts_voice": "卡提希娅-中文",
+        "dg_cities": ""
+    },
+    "api_version": "1.0",
+    "permissions": []
+}

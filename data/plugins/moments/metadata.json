@@ -1,0 +1,70 @@
+{
+  "name": "moments",
+  "display_name": "朋友圈",
+  "version": "2.0.0",
+  "author": "Nekolyra",
+  "description": "她自己发 QQ 空间说说：想不想发、写什么、下次多久之后再想，全由模型决定，代码不掷骰子。",
+  "entry": "main.py",
+  "api_version": "1.0",
+  "tags": [
+    "人格",
+    "自发"
+  ],
+  "permissions": [
+    "onebot",
+    "db",
+    "ai",
+    "page"
+  ],
+  "defaults": {
+    "mt_enabled": true,
+    "mt_dry_run": false,
+    "mt_ugc_right": 4,
+    "mt_allow_image": true,
+    "mt_max_len": 140,
+    "mt_min_gap": 15,
+    "mt_max_gap": 1440
+  },
+  "config": [
+    {
+      "title": "朋友圈",
+      "fields": [
+        [
+          "mt_enabled",
+          "允许她自己发说说",
+          "bool"
+        ],
+        [
+          "mt_dry_run",
+          "演练模式（只生成不发布）",
+          "bool"
+        ],
+        [
+          "mt_min_gap",
+          "最短间隔（分钟，护栏：防刷屏）",
+          "int"
+        ],
+        [
+          "mt_max_gap",
+          "最长间隔（分钟，护栏：防睡死）",
+          "int"
+        ],
+        [
+          "mt_ugc_right",
+          "可见范围（1所有人 4好友 16部分可见 64仅自己 128部分不可见）",
+          "int"
+        ],
+        [
+          "mt_allow_image",
+          "允许配图",
+          "bool"
+        ],
+        [
+          "mt_max_len",
+          "正文最大字数",
+          "int"
+        ]
+      ]
+    }
+  ]
+}
