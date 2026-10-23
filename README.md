@@ -169,7 +169,7 @@ def setup(ctx):
 
 **`ctx` 上有什么、三个必踩的坑、加载器会拦什么** -> **[docs/插件开发.md](docs/插件开发.md)**
 
-## 项目状态（说实话）
+## 项目状态
 
 **稳定、天天在用的**：
 
@@ -188,21 +188,6 @@ def setup(ctx):
 - **群管** —— 只覆盖常见场景。**没有禁言功能**，也没有复杂的权限体系
 - **游戏库的 AI 整理** —— 受 `gf_ai_max_calls` 限制，文件特别多的群要扫好几轮才整理完
 - **Docker** —— `Dockerfile` 和 `docker-compose.yml` **作者没实测过**（机器上没装 Docker）
-
-**已知不一致（不是功能问题，是仓库里的数据没对齐）**：
-
-- `VERSION` 文件是 **1.0.4.4**（程序运行时读的就是它），
-  但仓库根目录的 `version.json` 还停在 **1.0.4.1**。
-  `version.json` 是**更新检查的 CDN 兜底副本**，程序自己的版本号以 `VERSION` 为准
-- `nekolyra/api.py` 里那个 `PluginCtx` Protocol 是**早期草稿**，
-  只列了 8 个方法，而且 `page` / `api` 这两个名字跟真实的
-  `register_page` / `register_api` 不一致。**以 `nekolyra/plugins/context.py` 为准**
-- `data/plugins/hello/main.py` 里有一句注释说配置会出现在「系统配置」页 ——
-  实际是在**插件自己的配置小窗**里
-- `data/plugins/badtest/` 是个**故意越界的测试插件**（源码里有 `import bot`），
-  用来验证加载器会拒绝它。它会被拒绝加载，出现在插件列表里是正常的
-
-**已知不做**：多租户 / 云托管 / 账号体系 / 移动端 App。
 
 **版本号是四段**：`主.次.功能组.修bug`
 
