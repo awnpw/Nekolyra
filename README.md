@@ -19,6 +19,15 @@
 
 ---
 
+## 两个站点地址
+
+| 地址 | 由谁提供 |
+|---|---|
+| https://awnpw.github.io/ | **awnpw.github.io** 仓库的根目录，只有一个跳转页 |
+| https://awnpw.github.io/Nekolyra/ | 本仓库的 **docs/** 目录（真正的介绍页）|
+
+改内容只改 docs/index.html，然后双击 D:\ai\site_push.cmd —— 它会自己提交、同步远端、推送，
+并等 Pages 构建完成后再告诉你结果。根站只是指针，永远指向项目页，不用单独维护。
 ## 三分钟快速开始
 
 ```bash
