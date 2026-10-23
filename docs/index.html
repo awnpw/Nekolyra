@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Nekolyra · 自己电脑上跑的 QQ 群 AI 机器人</title>
+<meta name="description" content="Nekolyra 是一个跑在自己电脑上的 QQ 群 AI 机器人：长期记忆、知识库、表情库、语音合成、插件运行时，以及一个完整的 Web 管理界面。数据全在本地。">
+<meta property="og:title" content="Nekolyra · 自己电脑上跑的 QQ 群 AI 机器人">
+<meta property="og:description" content="长期记忆 / 知识库 / 表情库 / 语音 / 插件运行时 / Web 管理台，数据全在本地。">
+<meta property="og:image" content="screenshots/hero.png">
+<link rel="icon" href="screenshots/icon-192.png">
+<style>
+  :root{
+    --ink:#0a0e1a; --text:#22283a; --text-2:#4e556b; --text-3:#7b8299;
+    --bg:#f7f9fd; --card:#ffffff; --line:#e6eaf4; --line-2:#dde1ee;
+    --blue:#2f6fed; --blue-soft:rgba(47,111,237,.09);
+    --green:#15803d; --amber:#b45309; --shadow:0 1px 2px rgba(16,24,40,.04),0 12px 32px -12px rgba(16,24,40,.12);
+    --radius:16px;
+  }
+  @media (prefers-color-scheme: dark){
+    :root{
+      --ink:#eef3fb; --text:#dbe3f3; --text-2:#a9b4cc; --text-3:#7f8aa6;
+      --bg:#0b1120; --card:#121a2e; --line:#1e2942; --line-2:#28345c;
+      --blue:#6aa9ff; --blue-soft:rgba(106,169,255,.13);
+      --shadow:0 1px 2px rgba(0,0,0,.3),0 16px 40px -16px rgba(0,0,0,.6);
+    }
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html{scroll-behavior:smooth}
+  body{
+    font-family:system-ui,-apple-system,"Segoe UI","Microsoft YaHei",sans-serif;
+    background:var(--bg); color:var(--text); line-height:1.65;
+    -webkit-font-smoothing:antialiased;
+  }
+  a{color:var(--blue);text-decoration:none}
+  a:hover{text-decoration:underline}
+  .wrap{max-width:1060px;margin:0 auto;padding:0 22px}
+  section{padding:78px 0}
+  h2{font-size:clamp(22px,3.4vw,30px);letter-spacing:-.02em;color:var(--ink);margin-bottom:8px}
+  .sub{color:var(--text-3);font-size:14.5px;margin-bottom:34px}
+
+  /* ---------- 顶部 ---------- */
+  header{position:sticky;top:0;z-index:20;backdrop-filter:blur(14px) saturate(1.4);
+    background:color-mix(in srgb,var(--bg) 78%,transparent);border-bottom:1px solid var(--line)}
+  .nav{display:flex;align-items:center;gap:14px;height:60px}
+  .nav img{width:28px;height:28px;border-radius:8px}
+  .nav b{font-size:15px;color:var(--ink);letter-spacing:-.01em}
+  .nav .sp{flex:1}
+  .nav a.link{font-size:13.5px;color:var(--text-2);padding:6px 4px}
+  .nav a.link:hover{color:var(--blue);text-decoration:none}
+  @media (max-width:700px){ .nav a.link{display:none} }
+
+  /* ---------- hero ---------- */
+  .hero{position:relative;overflow:hidden;padding:76px 0 60px;text-align:center}
+  .hero::before{content:"";position:absolute;inset:-40% 30% auto;height:420px;
+    background:radial-gradient(circle at 50% 0,var(--blue-soft),transparent 70%);pointer-events:none}
+  .hero .logo{width:82px;height:82px;border-radius:22px;box-shadow:var(--shadow);margin-bottom:20px}
+  .hero h1{font-size:clamp(30px,5.6vw,46px);line-height:1.15;letter-spacing:-.03em;color:var(--ink)}
+  .hero p.lead{margin:16px auto 0;max-width:620px;font-size:clamp(15px,2.1vw,17.5px);color:var(--text-2)}
+  .cta{display:flex;gap:12px;justify-content:center;flex-wrap:wrap;margin-top:30px}
+  .btn{display:inline-flex;align-items:center;gap:8px;padding:12px 22px;border-radius:11px;
+    font-size:14.5px;font-weight:600;border:1px solid var(--line-2);background:var(--card);
+    color:var(--text);box-shadow:var(--shadow);transition:transform .12s ease,border-color .12s}
+  .btn:hover{transform:translateY(-1px);border-color:var(--blue);text-decoration:none}
+  .btn.primary{background:var(--blue);border-color:var(--blue);color:#fff}
+  .badges{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin-top:26px;
+    font-size:12px;color:var(--text-3)}
+  .badges span{padding:3px 10px;border:1px solid var(--line);border-radius:20px;background:var(--card)}
+  .shot{margin:46px auto 0;max-width:960px}
+  .shot img{width:100%;border-radius:var(--radius);border:1px solid var(--line-2);box-shadow:var(--shadow)}
+
+  /* ---------- 功能 ---------- */
+  .grid{display:grid;gap:14px;grid-template-columns:repeat(auto-fill,minmax(240px,1fr))}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);
+    padding:20px 20px 18px;box-shadow:var(--shadow)}
+  .card .ic{font-size:20px;line-height:1}
+  .card h3{font-size:14.5px;color:var(--ink);margin:10px 0 5px;letter-spacing:-.01em}
+  .card p{font-size:13px;color:var(--text-2);line-height:1.6}
+
+  /* ---------- 截图 ---------- */
+  .shots{display:grid;gap:16px;grid-template-columns:1fr 1fr}
+  @media (max-width:760px){ .shots{grid-template-columns:1fr} }
+  figure{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);
+    overflow:hidden;box-shadow:var(--shadow)}
+  figure img{width:100%;display:block}
+  figcaption{padding:10px 14px;font-size:12.5px;color:var(--text-3);border-top:1px solid var(--line)}
+  figcaption b{color:var(--text-2);font-weight:600}
+
+  /* ---------- 步骤 ---------- */
+  .steps{display:grid;gap:14px;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));counter-reset:s}
+  .step{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:20px;position:relative}
+  .step::before{counter-increment:s;content:counter(s);position:absolute;top:-11px;left:20px;
+    width:26px;height:26px;border-radius:50%;background:var(--blue);color:#fff;
+    font-size:13px;font-weight:700;display:flex;align-items:center;justify-content:center}
+  .step h3{font-size:14px;color:var(--ink);margin:8px 0 6px}
+  .step p{font-size:13px;color:var(--text-2)}
+  pre{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px 18px;
+    overflow:auto;margin-top:18px;font-size:12.5px;line-height:1.8;color:var(--text-2);
+    font-family:ui-monospace,"Cascadia Mono",Consolas,monospace}
+
+  /* ---------- 插件表 ---------- */
+  .tbl{width:100%;border-collapse:collapse;font-size:13px;background:var(--card);
+    border:1px solid var(--line);border-radius:var(--radius);overflow:hidden}
+  .tbl th,.tbl td{padding:11px 14px;text-align:left;border-bottom:1px solid var(--line);vertical-align:top}
+  .tbl th{font-size:12px;color:var(--text-3);font-weight:600;background:color-mix(in srgb,var(--line) 30%,transparent)}
+  .tbl tr:last-child td{border-bottom:none}
+  .tbl td:first-child{white-space:nowrap;font-weight:600;color:var(--ink)}
+  .tbl td:nth-child(2){color:var(--text-2)}
+  .tag{display:inline-block;padding:1px 7px;border-radius:6px;font-size:11px;
+    background:var(--blue-soft);color:var(--blue);margin-right:4px}
+
+  /* ---------- FAQ ---------- */
+  details{background:var(--card);border:1px solid var(--line);border-radius:12px;
+    padding:14px 18px;margin-bottom:10px}
+  details summary{cursor:pointer;font-size:14px;color:var(--ink);font-weight:600;list-style:none}
+  details summary::-webkit-details-marker{display:none}
+  details summary::before{content:"＋";color:var(--text-3);margin-right:8px;font-weight:400}
+  details[open] summary::before{content:"－"}
+  details p{margin-top:10px;font-size:13.5px;color:var(--text-2)}
+
+  /* ---------- 页脚 ---------- */
+  footer{border-top:1px solid var(--line);padding:34px 0 46px;font-size:12.5px;color:var(--text-3)}
+  footer .row{display:flex;gap:18px;flex-wrap:wrap;align-items:center}
+  footer .row a{color:var(--text-2)}
+  footer .note{margin-top:14px;line-height:1.8}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="wrap nav">
+    <img src="screenshots/icon-192.png" alt="Nekolyra">
+    <b>Nekolyra</b>
+    <span class="sp"></span>
+    <a class="link" href="#features">功能</a>
+    <a class="link" href="#shots">界面</a>
+    <a class="link" href="#start">上手</a>
+    <a class="link" href="#plugins">插件</a>
+    <a class="link" href="#faq">问答</a>
+    <a class="link" href="https://github.com/awnpw/Nekolyra">GitHub</a>
+  </div>
+</header>
+
+<div class="wrap hero">
+  <img class="logo" src="screenshots/icon-192.png" alt="">
+  <h1>Nekolyra</h1>
+  <p class="lead">
+    自己电脑上跑的 QQ 群 AI 机器人。<br>
+    长期记忆、知识库、表情库、语音合成、可装卸的插件，以及一个完整的 Web 管理界面 ——
+    <b>数据全部留在本地</b>。
+  </p>
+  <div class="cta">
+    <a class="btn primary" href="https://github.com/awnpw/Nekolyra/releases/latest">下载桌面版</a>
+    <a class="btn" href="https://github.com/awnpw/Nekolyra">查看源码</a>
+  </div>
+  <div class="badges">
+    <span>版本 1.0.5.2</span><span>Windows / Linux / Docker</span><span>GPL-3.0</span><span>Python 3.12+</span>
+  </div>
+  <div class="shot"><img src="screenshots/hero.png" alt="Nekolyra 管理界面"></div>
+</div>
+
+<section id="features" class="wrap">
+  <h2>它比"接个 API 回话"多做了什么</h2>
+  <p class="sub">下面每一条都是真的在跑的功能，不是规划。</p>
+  <div class="grid">
+    <div class="card"><div class="ic">🤖</div><h3>像个人的对话</h3>
+      <p>人格设定（名字 / 身份 / 行为 / 语气）可分层覆盖，带上下文与流式输出，不会每句都失忆。</p></div>
+    <div class="card"><div class="ic">🧠</div><h3>长期记忆</h3>
+      <p>按「群 / 人 / 群内某人」分层存进 SQLite，能在管理页里翻、改、删。</p></div>
+    <div class="card"><div class="ic">📚</div><h3>知识库</h3>
+      <p>分文件夹、带去重、按群隔离。她查得到，你管得住。</p></div>
+    <div class="card"><div class="ic">🎭</div><h3>表情库</h3>
+      <p>群里收图 → 视觉模型写描述 → 按情绪打标 → 回话时按语气挑一张发出去。</p></div>
+    <div class="card"><div class="ic">🛡️</div><h3>群管与风控</h3>
+      <p>入群验证、黑名单、广告拦截（关键词 / 黑域名）、撤回与踢人，含自带管理页。</p></div>
+    <div class="card"><div class="ic">🔊</div><h3>语音合成</h3>
+      <p>IndexTTS / CosyVoice2，可选。先判断情绪，再按情绪挑音色。</p></div>
+    <div class="card"><div class="ic">🔌</div><h3>插件运行时</h3>
+      <p>纯 Python 目录即插件，能注册命令、消息钩子和自己的管理页，改完热加载不用重启。</p></div>
+    <div class="card"><div class="ic">🖥️</div><h3>Web 管理台</h3>
+      <p>原生窗口里的单页应用，跟 OneBot 接口共用同一个端口，所有接口都要 token。</p></div>
+    <div class="card"><div class="ic">📋</div><h3>指令一览图</h3>
+      <p>群里发「帮助」，她回一张自动分页的指令图，不用记命令。</p></div>
+  </div>
+</section>
+
+<section id="shots" class="wrap">
+  <h2>界面</h2>
+  <p class="sub">真实截图（群号与 QQ 号已打码）。</p>
+  <div class="shots">
+    <figure><img src="screenshots/01-概览.png" alt="概览"><figcaption><b>概览</b> · 运行指标 + 实时日志</figcaption></figure>
+    <figure><img src="screenshots/02-插件.png" alt="插件"><figcaption><b>插件</b> · 启用 / 配置 / 卸载，热加载</figcaption></figure>
+    <figure><img src="screenshots/04-长期记忆.png" alt="长期记忆"><figcaption><b>长期记忆</b> · 按群 / 按人看，可手动校对</figcaption></figure>
+    <figure><img src="screenshots/05-表情库.png" alt="表情库"><figcaption><b>表情库</b> · 自动识图打标，按情绪挑图</figcaption></figure>
+  </div>
+</section>
+
+<section id="start" class="wrap">
+  <h2>三分钟上手</h2>
+  <p class="sub">跑起来是三件事，不是一件。</p>
+  <div class="steps">
+    <div class="step"><h3>装一种跑法</h3><p>Windows 下载 zip 解压双击；Linux 拉源码跑 bot.py；或者 Docker。</p></div>
+    <div class="step"><h3>配一个 QQ 协议端</h3><p>NapCat / Lagrange.OneBot / LLOneBot 三选一，实现 OneBot v11，反向 WebSocket 连过来。</p></div>
+    <div class="step"><h3>填 AI 接口</h3><p>OpenAI 兼容协议，换一家只改配置。不填她就不说话，别的功能照常。</p></div>
+  </div>
+  <pre># Windows：下载 Nekolyra-desktop-v*.zip → 解压到空目录 → 双击 Nekolyra.exe
+# Linux  ：git clone https://github.com/awnpw/Nekolyra.git &amp;&amp; cd Nekolyra
+#          pip install -r requirements.txt &amp;&amp; python bot.py
+# Docker ：docker compose up -d</pre>
+  <p class="sub" style="margin:22px 0 0">
+    最容易踩的坑在协议端：NapCat 版本和 QQ 版本必须对得上，错了不报错、只静默失灵。
+    细节见 <a href="部署指南.md">部署指南</a>。
+  </p>
+</section>
+
+<section id="plugins" class="wrap">
+  <h2>插件</h2>
+  <p class="sub">随仓库发布 11 个，都能在管理页里停用或卸载。写自己的插件只要一个目录两个文件。</p>
+  <table class="tbl">
+    <thead><tr><th>插件</th><th>做什么</th><th>标签</th></tr></thead>
+    <tbody>
+      <tr><td>广告拦截</td><td>命中关键词 / 黑域名就撤回、拉黑、踢出，并私聊通知超管</td><td><span class="tag">群管</span><span class="tag">安全</span></td></tr>
+      <tr><td>关键词回复</td><td>关键词自动回复，带命中统计；照着它就能写自己的插件</td><td><span class="tag">工具</span></td></tr>
+      <tr><td>晨昏播报</td><td>每天早晚播报问候 + 天气 + 可选语音，可指定群或全群广播</td><td><span class="tag">定时</span><span class="tag">语音</span></td></tr>
+      <tr><td>游戏库</td><td>扫群文件建索引，用 AI 把乱糟糟的文件名整理成游戏名</td><td><span class="tag">群文件</span></td></tr>
+      <tr><td>朋友圈</td><td>她自己发 QQ 空间说说：想不想发、写什么、下次多久后再想，全由模型决定</td><td><span class="tag">人格</span></td></tr>
+      <tr><td>签到积分</td><td>每日签到拿积分、看排行、查自己的积分</td><td><span class="tag">积分</span></td></tr>
+      <tr><td>今日老婆</td><td>每天抽一个二次元老婆（带 AI 写的介绍和配图），可用积分换</td><td><span class="tag">娱乐</span></td></tr>
+      <tr><td>抽奖</td><td>从最近活跃的群成员里随机抽一个</td><td><span class="tag">娱乐</span></td></tr>
+      <tr><td>群报</td><td>统计群里某天的发言排行</td><td><span class="tag">统计</span></td></tr>
+      <tr><td>生词本</td><td>遇到不懂的词主动问，有人解释就记住并写进知识库</td><td><span class="tag">学习</span></td></tr>
+      <tr><td>打招呼</td><td>示例插件：被 @ 时回一句问候，改它就能写出第一个插件</td><td><span class="tag">示例</span></td></tr>
+    </tbody>
+  </table>
+  <p class="sub" style="margin:18px 0 0">插件开发文档：<a href="插件开发.md">插件开发</a> · 配置项：<a href="配置项.md">配置项</a></p>
+</section>
+
+<section id="faq" class="wrap">
+  <h2>常见问题</h2>
+  <p class="sub">全量在 <a href="常见问题.md">常见问题</a>。</p>
+  <details><summary>机器人不说话？</summary>
+    <p>先看 startup.log 有没有「AI 连接正常」。没有就是 AI 接口没配好；有就是触发条件的问题 —— 默认要 @ 或叫名字才会理人。</p></details>
+  <details><summary>协议端连不上？</summary>
+    <p>NapCat 版本必须和 QQ 版本对得上，错了不报错、只静默失灵。另外确认反向 WebSocket 是往 127.0.0.1 的 PORT 连。</p></details>
+  <details><summary>管理页打不开 / 401？</summary>
+    <p>token 在 config.json 的 admin_token 里，URL 要用编码后的值（# &amp; = + 空格 都要转）。</p></details>
+  <details><summary>更新失败怎么办？</summary>
+    <p>看 data/updates/update.log：它会写清楚预检、备份、换名、验收每一步。验收不过会自动退回上一版，安装目录不会停在半新半旧。</p></details>
+  <details><summary>数据存在哪？能备份吗？</summary>
+    <p>全在安装目录的 data/ 下：bot.db、plugins/、stickers/、config.json。拷走整个 data/ 就是完整备份。</p></details>
+</section>
+
+<footer>
+  <div class="wrap">
+    <div class="row">
+      <a href="https://github.com/awnpw/Nekolyra">GitHub</a>
+      <a href="https://github.com/awnpw/Nekolyra/releases">发版记录</a>
+      <a href="部署指南.md">部署指南</a>
+      <a href="配置项.md">配置项</a>
+      <a href="插件开发.md">插件开发</a>
+      <a href="常见问题.md">常见问题</a>
+      <a href="https://github.com/awnpw/Nekolyra/blob/main/CHANGELOG.md">更新日志</a>
+      <a href="https://github.com/awnpw/Nekolyra/blob/main/LICENSE">GPL-3.0</a>
+    </div>
+    <div class="note">
+      Nekolyra 是独立项目，与腾讯 / QQ 官方无关。<br>
+      机器人自己连不上 QQ，必须有协议端；数据全部留在你自己的机器上。
+    </div>
+  </div>
+</footer>
+
+<script>
+// 图片点击放大（不引入任何第三方库）
+document.querySelectorAll(".shot img,.shots img").forEach(function (img) {
+  img.style.cursor = "zoom-in";
+  img.addEventListener("click", function () {
+    var m = document.createElement("div");
+    m.style.cssText = "position:fixed;inset:0;z-index:99;background:rgba(8,12,24,.82);" +
+      "display:flex;align-items:center;justify-content:center;padding:24px;cursor:zoom-out";
+    var big = img.cloneNode();
+    big.style.cssText = "max-width:100%;max-height:100%;border-radius:12px;box-shadow:0 24px 60px rgba(0,0,0,.5)";
+    m.appendChild(big);
+    m.addEventListener("click", function () { m.remove(); });
+    document.body.appendChild(m);
+  });
+});
+</script>
+</body>
+</html>
