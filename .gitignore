@@ -10,7 +10,8 @@ data/*
 # 构建产物与中间目录
 build/
 dist/
-dist_launcher/
+dist_launcher/*
+!dist_launcher/NekolyraUpdater.exe
 build_launcher/*/
 *.spec.bak
 *.pycprobe
@@ -43,3 +44,7 @@ _shots_profile/
 /_redo.py
 /_ship.py
 /_sign_release.py
+
+# PyInstaller 的中间目录（spec 要留，产物不留）
+build_launcher/work/
+build_launcher/NekolyraUpdater/

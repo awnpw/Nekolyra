@@ -1,23 +1,25 @@
 # -*- coding: utf-8 -*-
-"""更新应用器 —— 按 tufup / PyUpdater 的做法用 robocopy 覆盖安装目录。
+"""更新应用器（也兼作 NekolyraUpdater.exe 的入口）。
 
-扒到的实现（不是我自己想的）：
-    tufup 0.10.0  src/tufup/utils/platform_specific.py
-        WIN_ROBOCOPY_OVERWRITE = ('/move', '/w:2')
-        WIN_BATCH_TEMPLATE = '@echo off / robocopy "{src_dir}" "{dst_dir}" {opts} / (goto) 2>nul & del "%~f0"'
-    PyUpdater 4.0  pyupdater/client/updates.py
-        self.bat_file = os.path.join(self.data_dir, "update.bat")
+设计原则：**任何一步失败都不能让安装目录卡在半新半旧的状态。**
 
-两者的 Windows 覆盖更新都是「等主程序退出 → robocopy 覆盖 → 启动新程序」，用 .bat 承载。
-这里照搬 robocopy 参数，只把承载方式从 .bat 换成无窗口进程（--noconsole 打包），
-所以不会再弹黑框，也不需要用户手动关程序（主程序自己退出）。
+    preflight  预检：payload 完整性 / 版本方向 / 磁盘余量 / 可选 SHA-256
+    backup     备份：exe 与 _internal 改名（同盘 rename，快且可逆）
+    apply      覆盖：逐文件 copy2，不用 /move —— payload 留着，失败了还能重试
+    verify     验收：拉起新 exe，等端口就绪 + 进程存活
+    成功       清理 payload / 旧 zip / 多余备份
+    失败       回滚：杀掉新进程、删除半成品、改名还原、拉起旧版
 
-用法（由 bot 退出前拉起）：
-    NekolyraUpdater.exe --install <安装根> --payload <暂存目录> --wait-pid <pid> --exe Nekolyra.exe --restart
+被替换/被回滚的只有程序本体（exe + _internal），**绝不碰 data/**。
+
+用法（由主程序退出前拉起）：
+    NekolyraUpdater.exe --install <安装根> --payload <暂存目录> --wait-pid <pid>
+                        --exe Nekolyra.exe --restart --ready-port 8080
 """
 import argparse
 import os
 import shutil
+import socket
 import subprocess
 import sys
 import time
@@ -30,15 +32,9 @@ for _s in (sys.stdout, sys.stderr):
 
 LOG_PATH = ""
 NO_WINDOW = 0x08000000
-
-# tufup 的选项（/move /w:2），外加：
-#   /e       必须加 —— robocopy 不指定 /e 时**不下钻子目录**，实测只搬了根目录那一个
-#            exe，_internal 里的 dll 全部漏掉（payload 也因此没被搬空）
-#   /is /it  必须加 —— 默认按「大小 + 时间戳」判断相同就跳过，
-#            实测会把同尺寸的新 dll 漏掉，这里强制包含全部文件
-#   /r:2     重试次数；/njh /njs /nc /ns /np /ndl /nfl 只影响输出，让日志干净
-ROBOCOPY_MOVE = ["/move", "/e", "/w:2", "/r:2", "/is", "/it",
-                 "/njh", "/njs", "/nc", "/ns", "/np", "/ndl", "/nfl"]
+DETACHED = 0x00000008
+CREATE_NEW_GROUP = 0x00000200
+STILL_ACTIVE = 259
 
 
 def log(msg):
@@ -55,69 +51,272 @@ def log(msg):
             pass
 
 
+# ---------------- 进程存活判断 ----------------
+# 为什么不用 tasklist：它要解析文本（/FI 失效时返回全表），
+# 子串匹配 "PID 在不在输出里" 会把"还在运行"误判成"已退出"，
+# 然后往运行中的程序上盖文件 —— 最坏的那种失败。
+def pid_alive(pid):
+    if not pid:
+        return False
+    if os.name != "nt":
+        try:
+            os.kill(pid, 0)
+            return True
+        except Exception:
+            return False
+    try:
+        import ctypes
+        k32 = ctypes.windll.kernel32
+        h = k32.OpenProcess(0x1000, False, int(pid))   # PROCESS_QUERY_LIMITED_INFORMATION
+        if not h:
+            return False
+        try:
+            code = ctypes.c_ulong()
+            if not k32.GetExitCodeProcess(h, ctypes.byref(code)):
+                return False
+            return code.value == STILL_ACTIVE
+        finally:
+            k32.CloseHandle(h)
+    except Exception:
+        return False
+
+
 def wait_pid_exit(pid, timeout=180.0):
-    """等主程序退出。用 tasklist 轮询，避免 ctypes 句柄类型踩坑。"""
     if not pid:
         return True
     t0 = time.time()
     while time.time() - t0 < timeout:
-        try:
-            out = subprocess.run(["tasklist", "/FI", "PID eq %d" % int(pid), "/NH"],
-                                 capture_output=True, encoding="utf-8",
-                                 errors="replace", timeout=30,
-                                 creationflags=NO_WINDOW).stdout or ""
-        except Exception:
-            return False
-        if str(pid) not in out:
-            log("主进程 %s 已退出（等 %.1f 秒）" % (pid, time.time() - t0))
+        if not pid_alive(pid):
+            log("主进程 %s 已退出（等了 %.1f 秒）" % (pid, time.time() - t0))
             return True
-        time.sleep(1.0)
-    log("等主进程超时（%.0f 秒）" % timeout)
+        time.sleep(0.5)
+    log("等主进程超时（%.0f 秒），它还在运行" % timeout)
     return False
 
 
-def run_robocopy(src, dst):
-    """robocopy 源目录 → 目标目录。返回 (退出码, 是否成功)。"""
-    args = ["robocopy", src, dst] + ROBOCOPY_MOVE
-    log("robocopy %s -> %s %s" % (src, dst, " ".join(ROBOCOPY_MOVE)))
+# ---------------- 版本与容量 ----------------
+def read_version(root):
     try:
-        r = subprocess.run(args, capture_output=True, encoding="utf-8",
-                           errors="replace", timeout=900, creationflags=NO_WINDOW)
-    except Exception as e:
-        log("robocopy 没跑起来：%s: %s" % (type(e).__name__, e))
-        return -1, False
-    code = r.returncode
-    # robocopy 的退出码：0-7 表示成功（含义不同），>=8 才是失败
-    ok = 0 <= code < 8
-    log("robocopy 退出码 %s（%s）" % (code, "成功" if ok else "失败"))
-    if not ok:
-        tail = ((r.stdout or "") + (r.stderr or "")).strip().split("\n")[-6:]
-        for line in tail:
-            log("  " + line.strip()[:120])
-    return code, ok
+        with open(os.path.join(root, "VERSION"), "r", encoding="utf-8") as f:
+            txt = f.read().strip()
+        parts = [int(x) for x in txt.split(".")[:4]]
+        while len(parts) < 4:
+            parts.append(0)
+        return tuple(parts), txt
+    except Exception:
+        return None, ""
 
 
-def fallback_copy(src, dst, skip_names=()):
-    """robocopy 不可用时的兜底：逐文件复制 + 删除源文件。"""
+def dir_size(path):
+    total = 0
+    for root, _dirs, files in os.walk(path):
+        for name in files:
+            try:
+                total += os.path.getsize(os.path.join(root, name))
+            except OSError:
+                pass
+    return total
+
+
+# ---------------- 预检 ----------------
+def preflight(install, payload, exe, allow_downgrade):
+    """返回 (ok, 原因)。这一关不过就一个字节都不动。"""
+    if not os.path.isdir(payload):
+        return False, "暂存目录不存在：%s" % payload
+    if not os.path.isfile(os.path.join(payload, exe)):
+        return False, "暂存目录里没有 %s，这不是完整安装包" % exe
+    inner = os.path.join(payload, "_internal")
+    if not os.path.isdir(inner):
+        return False, "暂存目录里没有 _internal/，更新包里缺运行库"
+
+    n_files = sum(len(fs) for _r, _d, fs in os.walk(payload))
+    if n_files < 20:
+        return False, "暂存目录只有 %d 个文件，明显不完整" % n_files
+
+    new_v, new_txt = read_version(payload)
+    old_v, old_txt = read_version(install)
+    if new_v and old_v and new_v < old_v and not allow_downgrade:
+        return False, "更新包版本 %s 比当前 %s 旧（要降级加 --allow-downgrade）" % (new_txt, old_txt)
+
+    need = dir_size(payload)
+    try:
+        free = shutil.disk_usage(install).free
+    except Exception:
+        free = 0
+    if free and free < need * 1.5:
+        return False, "磁盘余量不足：需要约 %.0f MB，只剩 %.0f MB" % (need / 1048576, free / 1048576)
+
+    log("预检通过：%d 个文件 / %.1f MB，版本 %s -> %s"
+        % (n_files, need / 1048576, old_txt or "?", new_txt or "?"))
+    return True, ""
+
+
+# ---------------- 备份 / 覆盖 / 回滚 ----------------
+def make_backup(install, payload, exe, stamp, made):
+    """把「payload 顶层会覆盖到的每个条目」改名备份。
+
+    为什么不是只备份 exe + _internal：payload 里还有 VERSION / requirements.txt 这些
+    根目录文件，它们也会被覆盖。只备份程序本体的话，回滚后就成了
+    「新 VERSION + 旧程序」—— 还是半新半旧，只是不容易看出来。
+    改名失败（文件被占用）说明主程序没退干净，此时必须停下，一个字节都别动。
+    """
+    names = set()
+    try:
+        names.update(os.listdir(payload))
+    except Exception:
+        pass
+    names.add(exe)
+    names.add("_internal")
+    pairs = []
+    for name in sorted(names):
+        src = os.path.join(install, name)
+        if not os.path.exists(src):
+            continue
+        dst = src + ".bak_" + stamp
+        try:
+            os.rename(src, dst)
+            pairs.append((dst, src))
+        except Exception as e:
+            log("备份 %s 失败（可能被占用）：%s: %s" % (name, type(e).__name__, e))
+            for d, s in reversed(pairs):
+                try:
+                    os.rename(d, s)
+                except Exception:
+                    pass
+            return False
+    made.extend(pairs)
+    log("已备份 %d 项（后缀 %s）：%s" % (len(pairs), stamp, ", ".join(os.path.basename(s) for _d, s in pairs)))
+    return True
+
+
+def copy_tree(src, dst):
+    """逐文件复制。返回 (ok, 失败数, 首条错误)。不删源目录。"""
     ok = fail = 0
-    for root, dirs, files in os.walk(src):
+    first_err = ""
+    for root, _dirs, files in os.walk(src):
         rel = os.path.relpath(root, src)
         target_root = dst if rel == "." else os.path.join(dst, rel)
-        os.makedirs(target_root, exist_ok=True)
+        try:
+            os.makedirs(target_root, exist_ok=True)
+        except Exception as e:
+            fail += len(files)
+            first_err = first_err or ("建目录 %s: %s" % (target_root, e))
+            continue
         for name in files:
-            if name in skip_names:
-                log("  跳过更新器自身 %s（正在运行，下次用临时副本方式替换）" % name)
-                continue
             s = os.path.join(root, name)
             d = os.path.join(target_root, name)
             try:
                 shutil.copy2(s, d)
-                os.remove(s)
                 ok += 1
-            except Exception:
+            except Exception as e:
                 fail += 1
-    log("兜底复制：成功 %d，失败 %d" % (ok, fail))
-    return fail == 0
+                if not first_err:
+                    first_err = "%s: %s" % (name, e)
+    log("复制完成：成功 %d，失败 %d%s" % (ok, fail, ("；首个错误 " + first_err) if first_err else ""))
+    return fail == 0, fail, first_err
+
+
+def remove_path(p):
+    try:
+        if os.path.isdir(p):
+            shutil.rmtree(p, ignore_errors=True)
+        elif os.path.isfile(p):
+            os.remove(p)
+    except Exception:
+        pass
+
+
+def rollback(install, exe, made, started_pid):
+    """回滚：杀掉新进程 → 把每个条目按备份精确还原。"""
+    log("开始回滚")
+    if started_pid and pid_alive(started_pid):
+        try:
+            subprocess.run(["taskkill", "/PID", str(started_pid), "/F"],
+                           capture_output=True, creationflags=NO_WINDOW, timeout=30)
+        except Exception:
+            pass
+    restored = failed = 0
+    for dst, src in reversed(made):
+        remove_path(src)
+        try:
+            os.rename(dst, src)
+            restored += 1
+        except Exception as e:
+            failed += 1
+            log("还原 %s 失败：%s: %s" % (src, type(e).__name__, e))
+    log("回滚完成：还原 %d 项，失败 %d 项" % (restored, failed))
+    return failed == 0
+
+
+# ---------------- 拉起与验收 ----------------
+def launch(install, exe):
+    path = os.path.join(install, exe)
+    if not os.path.isfile(path):
+        return 0
+    flags = 0
+    if os.name == "nt":
+        flags = DETACHED | CREATE_NEW_GROUP
+    try:
+        p = subprocess.Popen([path], cwd=install, close_fds=True, creationflags=flags)
+        log("已拉起新版：%s（pid %d）" % (exe, p.pid))
+        return p.pid
+    except Exception as e:
+        log("拉起失败：%s: %s" % (type(e).__name__, e))
+        return 0
+
+
+def port_ready(port, timeout=1.0):
+    if not port:
+        return False
+    s = socket.socket()
+    s.settimeout(timeout)
+    try:
+        s.connect(("127.0.0.1", int(port)))
+        return True
+    except Exception:
+        return False
+    finally:
+        try:
+            s.close()
+        except Exception:
+            pass
+
+
+def health_check(pid, port, timeout):
+    """等「端口就绪 + 进程还活着」。两者都要，只看一个都可能误判。"""
+    t0 = time.time()
+    while time.time() - t0 < timeout:
+        if pid and not pid_alive(pid):
+            return False, "新进程已退出（启动即崩）"
+        if port_ready(port):
+            return True, "端口 %s 就绪（%.1f 秒）" % (port, time.time() - t0)
+        time.sleep(1.0)
+    return False, "等 %.0f 秒仍未就绪" % timeout
+
+
+# ---------------- 清理 ----------------
+def cleanup(payload, install, keep_backups):
+    remove_path(payload)
+    # 旧 zip
+    upd_dir = os.path.join(install, "data", "updates")
+    if os.path.isdir(upd_dir):
+        for name in os.listdir(upd_dir):
+            if name.lower().endswith(".zip"):
+                remove_path(os.path.join(upd_dir, name))
+    # 过多备份：只留最近 keep_backups 组
+    try:
+        groups = {}
+        for name in os.listdir(install):
+            if ".bak_" in name:
+                stamp = name.split(".bak_")[-1]
+                groups.setdefault(stamp, []).append(name)
+        stamps = sorted(groups.keys(), reverse=True)
+        for st in stamps[keep_backups:]:
+            for name in groups[st]:
+                remove_path(os.path.join(install, name))
+            log("清理旧备份 %s" % st)
+    except Exception as e:
+        log("清理备份出错：%s" % e)
 
 
 def main():
@@ -128,92 +327,75 @@ def main():
     ap.add_argument("--wait-pid", type=int, default=0)
     ap.add_argument("--exe", default="Nekolyra.exe")
     ap.add_argument("--restart", action="store_true")
+    ap.add_argument("--ready-port", type=int, default=8080)
+    ap.add_argument("--ready-timeout", type=float, default=90.0)
+    ap.add_argument("--keep-backups", type=int, default=1)
+    ap.add_argument("--allow-downgrade", action="store_true")
+    ap.add_argument("--dry-run", action="store_true")
     a = ap.parse_args()
 
     install = os.path.abspath(a.install)
     payload = os.path.abspath(a.payload)
-    LOG_PATH = os.path.join(install, "update.log")
-    log("=" * 52)
-    log("开始更新：%s -> %s" % (payload, install))
+    upd_dir = os.path.join(install, "data", "updates")
+    try:
+        os.makedirs(upd_dir, exist_ok=True)
+        LOG_PATH = os.path.join(upd_dir, "update.log")
+    except Exception:
+        LOG_PATH = os.path.join(os.environ.get("TEMP", "."), "nekolyra_update.log")
 
-    if not os.path.isdir(payload):
-        log("暂存目录不存在，退出")
+    log("=" * 56)
+    log("更新开始：%s -> %s" % (payload, install))
+
+    ok, why = preflight(install, payload, a.exe, a.allow_downgrade)
+    if not ok:
+        log("预检未通过，安装目录未改动：" + why)
         return 2
 
     if not wait_pid_exit(a.wait_pid):
-        # 主进程没退出就覆盖 = 往正在运行的程序上盖文件：exe/dll 被占用，
-        # robocopy 只会盖成功一部分（/move 还会把没搬成功的留在暂存区），
-        # 安装目录变成一半新一半旧 —— 比这次不更新糟得多。
-        # 上层（routes_update.api_update_apply）已经安排主进程自己退出，
-        # 走到这里说明它卡住了，宁可不更新。
         log("主进程仍在运行，放弃本次更新（安装目录未改动）")
         return 4
-    time.sleep(2)
+    time.sleep(1.5)      # 给句柄释放留一点余量
 
-    # 若更新器本身就在安装目录里运行，它替换不了自己 —— 这是 Windows 的限制，
-    # 不是错误。真正「全新」的更新器下一轮会从 %TEMP% 运行，那时就能换掉。
-    self_name = os.path.basename(os.path.abspath(sys.argv[0]))
-    me_in_install = os.path.dirname(os.path.abspath(sys.argv[0])).lower() == install.lower()
-    skip = {self_name} if me_in_install else set()
+    stamp = time.strftime("%Y%m%d_%H%M%S")
+    backups = []
+    if not make_backup(install, payload, a.exe, stamp, backups):
+        log("备份失败，放弃本次更新（安装目录未改动）")
+        return 5
 
-    code, ok = run_robocopy(payload, install)
-    if not ok:
-        log("robocopy 报错，改用兜底复制（跳过更新器自身）")
-        ok = fallback_copy(payload, install, skip_names=skip)
+    copied, _fail, _err = copy_tree(payload, install)
+    if not copied:
+        log("复制阶段有失败，回滚")
+        if rollback(install, a.exe, backups, 0) and a.restart:
+            launch(install, a.exe)
+        return 6
 
-    exe = os.path.join(install, a.exe)
-    if not ok:
-        log("更新未完成，程序保持原状")
-        if a.restart and os.path.isfile(exe):
-            log("启动原版本 %s" % exe)
-            subprocess.Popen([exe], cwd=install, close_fds=True)
-        return 3
+    if a.dry_run:
+        log("--dry-run：复制与备份都成功，现在回滚以验证可逆性")
+        ok_rb = rollback(install, a.exe, backups, 0)
+        log("回滚%s" % ("成功（安装目录已复原）" if ok_rb else "失败！需要人工处理"))
+        return 0 if ok_rb else 7
 
-    log("更新完成")
-    try:
-        if os.path.isdir(payload) and not os.listdir(payload):
-            os.rmdir(payload)
-    except Exception:
-        pass
-
-    # 清掉堆在 data/updates 里的旧更新包：每次更新都会留一个几十 MB 的 zip，
-    # 不清理的话半年就是几个 G（实测用户机器上已经堆了 200+ MB）
-    try:
-        upd_dir = os.path.join(install, "data", "updates")
-        keep_ms = 3 * 24 * 3600
-        now = time.time()
-        freed = 0
-        if os.path.isdir(upd_dir):
-            for name in os.listdir(upd_dir):
-                if not name.lower().endswith(".zip"):
-                    continue
-                p = os.path.join(upd_dir, name)
-                try:
-                    if now - os.path.getmtime(p) > keep_ms:
-                        freed += os.path.getsize(p)
-                        os.remove(p)
-                except OSError:
-                    pass
-        if freed:
-            log("清理旧更新包，释放 %.1f MB" % (freed / 1048576.0))
-    except Exception as e:
-        log("清理旧更新包失败：%s" % e)
-
+    pid = launch(install, a.exe) if a.restart else 0
     if a.restart:
-        log("启动 %s" % exe)
-        time.sleep(1)
-        subprocess.Popen([exe], cwd=install, close_fds=True)
+        good, note = health_check(pid, a.ready_port, a.ready_timeout)
+        log("验收：%s（%s）" % ("通过" if good else "未通过", note))
+        if not good:
+            rb_ok = rollback(install, a.exe, backups, pid)
+            if a.restart:
+                launch(install, a.exe)
+            log("已回滚到上一版%s" % ("" if rb_ok else "，但回滚不完整"))
+            return 8
 
-    # 自己可能是从 %TEMP% 复制过来的副本，删掉它（删除会延迟到进程退出）
-    try:
-        me = os.path.abspath(sys.argv[0])
-        if os.path.dirname(me).lower() != install.lower() and os.path.isfile(me):
-            os.remove(me)
-            log("已删除临时副本 %s" % me)
-    except Exception:
-        pass
+    log("更新成功")
+    cleanup(payload, install, max(0, a.keep_backups))
     return 0
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    try:
+        sys.exit(main())
+    except SystemExit:
+        raise
+    except Exception as e:
+        log("更新器异常退出：%s: %s" % (type(e).__name__, e))
+        sys.exit(9)

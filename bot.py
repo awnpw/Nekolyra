@@ -8772,6 +8772,9 @@ _reg_update(
     fetch_latest_release=fetch_latest_release,
     get_http=get_http,
     log=log,
+    PORT=PORT,
+    # 传 thunk 而不是函数本体：shutdown 定义在本文件更后面，注册时还不存在
+    shutdown=lambda: shutdown(),
 )
 
 

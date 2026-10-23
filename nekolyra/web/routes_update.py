@@ -285,10 +285,29 @@ def register(app, **deps):
             import threading
             import zipfile
 
-            payload = os.path.join(UPDATE_DIR, "_payload")
-            if os.path.isdir(payload):
-                shutil.rmtree(payload, ignore_errors=True)
-            os.makedirs(payload, exist_ok=True)
+            # 暂存目录必须放在安装目录**之外**：更新器拿它当"源"去覆盖安装目录，
+            # 源在目标内部就等于搬自己的祖先 —— 出错时连原状都拼不回来。
+            import tempfile
+            payload = tempfile.mkdtemp(prefix="nekolyra_payload_")
+
+            # 落盘后再核一次 SHA-256（下载时核过；这里防"文件被换掉/写坏"）
+            try:
+                want_sha = str((_UPDATE_SUMS.get("map") or {}).get(want) or "")
+                if want_sha:
+                    import hashlib
+                    h = hashlib.sha256()
+                    with open(zpath, "rb") as _f:
+                        for _chunk in iter(lambda: _f.read(1 << 20), b""):
+                            h.update(_chunk)
+                    got_sha = h.hexdigest()
+                    if got_sha.lower() != want_sha.lower():
+                        shutil.rmtree(payload, ignore_errors=True)
+                        return JSONResponse({
+                            "error": "更新包校验失败（SHA-256 不符），已丢弃",
+                            "expect": want_sha, "got": got_sha}, status_code=400)
+                    log("info", "更新", "应用前 SHA-256 复核通过")
+            except Exception as _e:
+                log("warn", "更新", "应用前复核跳过：%s: %s" % (type(_e).__name__, _e))
 
             with zipfile.ZipFile(zpath) as z:
                 names = z.namelist()
@@ -331,13 +350,24 @@ def register(app, **deps):
             except Exception as _e:
                 log("warn", "更新", "复制更新器到临时目录失败（就地运行）：%s" % _e)
                 runner = applier
+            # 交给更新器的关键参数：就绪端口（起来后要靠它验收）、备份保留份数
             subprocess.Popen([runner, "--install", base, "--payload", payload,
-                              "--wait-pid", str(os.getpid()), "--exe", exe_name, "--restart"],
+                              "--wait-pid", str(os.getpid()), "--exe", exe_name,
+                              "--restart", "--ready-port", str(PORT or 8080),
+                              "--keep-backups", "1"],
                              cwd=base, close_fds=True, creationflags=flags)
             log("info", "更新", "%s 解压 %d 个文件，更新器已拉起，本进程即将退出" % (want, n_files))
 
             def _bye():
-                time.sleep(2.0)
+                time.sleep(1.5)
+                # 走真正的收尾：停后台任务 / checkpoint WAL / 落盘配置。
+                # 以前直接 os._exit(0) 等于拔电源 —— 每次更新都可能丢最后几条数据。
+                try:
+                    fn = globals().get("shutdown")
+                    if callable(fn):
+                        fn()
+                except Exception as _e:
+                    log("warn", "更新", "关停收尾出错（继续退出）：%s" % _e)
                 os._exit(0)
 
             threading.Thread(target=_bye, daemon=True, name="apply-exit").start()
