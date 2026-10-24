@@ -10,7 +10,7 @@ plugin runtime, and a full web admin UI. Everything runs on your own machine.
 [![Python](https://img.shields.io/badge/Python-3.12%2B-3776ab?logo=python&logoColor=white)](https://www.python.org/)
 [![License](https://img.shields.io/badge/License-GPL--3.0-blue)](LICENSE)
 ![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20Linux%20%7C%20Docker-6b7280)
-[![Version](https://img.shields.io/badge/version-1.0.5.2-2ea44f)](VERSION)
+[![Version](https://img.shields.io/badge/version-1.0.6.0-2ea44f)](VERSION)
 
 [简体中文](README.md) · **English** · [Changelog](CHANGELOG.md)
 

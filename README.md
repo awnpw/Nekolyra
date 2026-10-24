@@ -9,7 +9,7 @@
 [![Python](https://img.shields.io/badge/Python-3.12%2B-3776ab?logo=python&logoColor=white)](https://www.python.org/)
 [![License](https://img.shields.io/badge/License-GPL--3.0-blue)](LICENSE)
 ![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20Linux%20%7C%20Docker-6b7280)
-[![Version](https://img.shields.io/badge/version-1.0.5.4-2ea44f)](VERSION)
+[![Version](https://img.shields.io/badge/version-1.0.6.0-2ea44f)](VERSION)
 
 [**介绍页**](https://awnpw.github.io/Nekolyra/) · [**简体中文**](README.md) · [English](README.en.md) · [更新日志](CHANGELOG.md) · [界面一览](#界面一览) · [常见问题](docs/常见问题.md)
 
