@@ -9,7 +9,7 @@
 [![Python](https://img.shields.io/badge/Python-3.12%2B-3776ab?logo=python&logoColor=white)](https://www.python.org/)
 [![License](https://img.shields.io/badge/License-GPL--3.0-blue)](LICENSE)
 ![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20Linux%20%7C%20Docker-6b7280)
-[![Version](https://img.shields.io/badge/version-1.0.5.2-2ea44f)](VERSION)
+[![Version](https://img.shields.io/badge/version-1.0.5.4-2ea44f)](VERSION)
 
 [**介绍页**](https://awnpw.github.io/Nekolyra/) · [**简体中文**](README.md) · [English](README.en.md) · [更新日志](CHANGELOG.md) · [界面一览](#界面一览) · [常见问题](docs/常见问题.md)
 
@@ -74,7 +74,7 @@
 | **有记性** | 分群记忆 + 分人记忆 + 客观画像，三层互不干扰 |
 | **能查资料** | 带文件夹层级的知识库，命中后自动注入提示词 |
 | **能管群** | 入群验证、广告拦截、黑名单、退群自动拉黑、入群申请审批 |
-| **能装插件** | 自带 8 个插件；不想要就停用，想加就自己写 |
+| **能装插件** | 自带 12 个插件；不想要就停用，想加就自己写 |
 | **有管理界面** | 14 个内置页面，浏览器里点点就行，不用改配置文件 |
 | **能自己更新** | 检查新版本 → 下载 → **Ed25519 验签** → 替换。签名不对直接中止 |
 
@@ -90,7 +90,7 @@
 
 | | |
 |---|---|
-| ![概览](docs/screenshots/01-概览.png)<br>**概览** · 运行指标 + 实时日志 | ![插件](docs/screenshots/02-插件.png)<br>**插件** · 三列卡片，启用/停用/配置/卸载 |
+| ![概览](docs/screenshots/01-概览.png)<br>**概览** · 运行指标 + 实时日志 | ![插件](docs/screenshots/02-插件.png)<br>**插件** · 两个标签：已安装 / 插件市场 |
 | ![知识库](docs/screenshots/03-知识库.png)<br>**知识库** · 分文件夹、去重、按群隔离 | ![长期记忆](docs/screenshots/04-长期记忆.png)<br>**长期记忆** · 按群/按人看，能手动校对 |
 | ![表情库](docs/screenshots/05-表情库.png)<br>**表情库** · 自动识图打标，按情绪挑图 | ![系统配置](docs/screenshots/06-系统配置.png)<br>**系统配置** · 地址、模型、Key，改完即时生效 |
 
@@ -184,7 +184,7 @@ def setup(ctx):
 
 - AI 对话、拆分回复、人格、用户画像注入
 - 长期记忆（群/用户/画像三层）、知识库（含导入导出、文件夹）
-- 插件系统 + 8 个自带插件 + 插件市场
+- 插件系统 + 12 个自带插件 + 插件市场
 - 管理界面 14 个页面（深色模式、响应式、壁纸）
 - 入群验证、退群拉黑、入群申请审批、自动备份
 - 自动更新 + Ed25519 验签
@@ -210,7 +210,7 @@ def setup(ctx):
 
 ## 常见问题
 
-高频的先看这里，全量约 30 条在 **[docs/常见问题.md](docs/常见问题.md)**。
+高频的先看这里，全量 16 条在 **[docs/常见问题.md](docs/常见问题.md)**。
 
 - **机器人不说话？** 先看 `startup.log` 有没有「AI 连接正常」，没有就是 AI 接口没配好。
 - **协议端连不上？** NapCat 版本必须和 QQ 版本对得上，错了不报错、只静默失灵。
@@ -233,7 +233,7 @@ def setup(ctx):
 | 识图 / 表情自动备注（开了才发） | 你配的视觉模型接口 |
 | 检查更新（30 分钟一次，可手动触发） | `api.github.com`；兜底 `cdn.jsdelivr.net`、`raw.githubusercontent.com` |
 | 下载更新包（你点了才下） | GitHub 直连，或你选的加速节点 `ghproxy.net` / `gh-proxy.com` |
-| 插件市场索引 | 同上三个域名 |
+| 插件市场索引 | 默认同上三个域名；设了 `NEKOE_PLUGIN_MARKET` 就发给你的市场域名 |
 | **`wife` 插件的默认配图接口** | `https://api.pearapi.ai/api/today_wife`（**第三方服务**，可在插件配置里改掉） |
 
 **发到 AI 服务的内容**：只有对话本身，加上被判定相关的记忆片段和知识库条目，

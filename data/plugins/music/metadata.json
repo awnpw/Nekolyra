@@ -27,7 +27,12 @@
     "music_voice_only": false,
     "music_voice_max_sec": 0,
     "music_search_limit": 5,
-    "music_pick_ttl": 120
+    "music_pick_ttl": 120,
+    "music_send_mode": "file",
+    "music_card_type": "163",
+    "music_file_max_mb": 20,
+    "music_cache_max_mb": 200,
+    "music_file_br": 320000
   },
   "config": [
     {
@@ -42,6 +47,16 @@
           "music_auto_parse",
           "自动识别群里的网易云链接",
           "bool"
+        ],
+        [
+          "music_send_mode",
+          "发送方式：card=音乐卡片（音质最好，推荐）/ voice=语音条（QQ 会压成 silk，音质差）/ file=群文件 / text=只发链接",
+          "text"
+        ],
+        [
+          "music_card_type",
+          "卡片类型：163=QQ 原生网易云卡片（推荐）/ custom=自定义卡片（很多版本不显示）",
+          "text"
         ],
         [
           "music_send_voice",
@@ -86,6 +101,21 @@
         [
           "music_pick_ttl",
           "回数字选的有效秒数",
+          "number"
+        ],
+        [
+          "music_file_max_mb",
+          "文件模式单曲上限（MB，超过改发卡片/链接）",
+          "number"
+        ],
+        [
+          "music_cache_max_mb",
+          "本地缓存上限（MB，超出自动删最旧的）",
+          "number"
+        ],
+        [
+          "music_file_br",
+          "文件模式请求码率（320000 / 192000 / 128000）",
           "number"
         ]
       ]

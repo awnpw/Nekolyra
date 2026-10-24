@@ -48,3 +48,8 @@ _shots_profile/
 # PyInstaller 的中间目录（spec 要留，产物不留）
 build_launcher/work/
 build_launcher/NekolyraUpdater/
+.commit_msg.txt
+.cm.txt
+.m.txt
+*.tmpmsg
+.squash.txt

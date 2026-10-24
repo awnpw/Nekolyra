@@ -171,6 +171,10 @@
 <ul>
   <li><b>管理页</b>：程序启动后打开 <code>http://127.0.0.1:8080/admin/</code>，第一次要带 token（在程序目录的 <code>config.json</code> 里，字段 <code>admin_token</code>）</li>
   <li><b>插件</b>：管理页「插件」页可以启用 / 停用 / 配置 / 重新加载；改完插件代码点「重新加载」即可，不用重启</li>
+
+  <li><b>插件市场</b>：管理页「插件」→「插件市场」里浏览、安装、升级插件，不用手动解压；
+      装好的在「已安装」页启用。索引地址由环境变量 <code>NEKOE_PLUGIN_MARKET</code> 决定</li>
+  <li><b>投稿审核</b>：市场里的插件由市场站长审核通过后才上架；程序本体不含审核功能</li>
   <li><b>更新</b>：管理页「检查更新」→ 下载 → 覆盖更新；失败会自动回滚到上一版，日志在 <code>data/updates/update.log</code></li>
   <li><b>备份</b>：把整个 <code>data/</code> 目录拷走即可（数据库、插件、表情、配置都在这）</li>
   <li><b>日志</b>：<code>startup.log</code>；每条消息有追踪 id，排查时按 id 搜最快</li>

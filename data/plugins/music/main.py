@@ -181,6 +181,9 @@ def setup(ctx):
         d = j.get("data") or {}
         if not isinstance(d, dict) or not d.get("song_name"):
             return None, "解析成功但没有歌曲信息（可能链接失效）"
+        # 把歌曲 ID 挂上去：163 类型卡片只需要 ID，不用直链
+        if kind == "id":
+            d["_id"] = str(value)
         if _num("music_cache_ttl", 300) > 0:
             _CACHE[value] = (time.time(), d)
         return d, ""
@@ -234,20 +237,29 @@ def setup(ctx):
         if not sid.isdigit():
             return None
         try:
-            r = await ctx.http_get(_FALLBACK_URL, params={"ids": "[%s]" % sid, "br": 128000},
-                                   timeout=15, headers=_hdr())
-            j = r.json()
-            arr = (j or {}).get("data") or []
-            if not arr or not str(arr[0].get("url") or ""):
+            # 先要 320k（exhigh），拿不到再退 192k / 128k。
+            # 原来写死 128k，等于把音质白降一半 —— QQ 语音条会再压成 silk，
+            # 源头就已经糊了，听着自然不舒服。
+            url, size, level = "", 0, ""
+            want = int(_num("music_file_br", 320000) or 320000)
+            ladder = [b for b in (want, 320000, 192000, 128000) if b <= want]
+            for br in dict.fromkeys(ladder):
+                r = await ctx.http_get(_FALLBACK_URL, params={"ids": "[%s]" % sid, "br": br},
+                                       timeout=15, headers=_hdr())
+                arr = ((r.json() or {}).get("data") or [])
+                if arr and str(arr[0].get("url") or ""):
+                    url = str(arr[0]["url"])
+                    size = int(arr[0].get("size") or 0)
+                    level = str(arr[0].get("level") or "")
+                    break
+            if not url:
                 return None
-            url = str(arr[0]["url"])
-            size = int(arr[0].get("size") or 0)
         except Exception as e:
             ctx.warn("兜底取直链失败：%s: %s" % (type(e).__name__, e))
             return None
 
         d = {"url": url,
-             "level": "128kbps（网易云直连）",
+             "level": "%s（网易云直连）" % (level or "直连"),
              "size": ("%.2fMB" % (size / 1048576.0)) if size else ""}
         try:
             r2 = await ctx.http_get(_FALLBACK_DETAIL, params={"ids": "[%s]" % sid},
@@ -271,6 +283,7 @@ def setup(ctx):
             pass
         if not d.get("song_name"):
             return None
+        d["_id"] = sid
         return d
 
     def _summary(d):
@@ -307,6 +320,38 @@ def setup(ctx):
         await ctx.send_group(gid, "\n".join(lines))
         ctx.log("列出 %d 个候选，等 %s 选" % (len(cands), uid))
 
+    def _prune_cache(keep_last=0):
+        """清本地缓存：删掉超过上限的部分（按修改时间从旧到新）。
+
+        为什么必须做：文件/语音模式都要把歌下载到本地，早期版本发完不删，
+        群里点几十首就躺出几个 G。
+        """
+        cache_dir = os.path.join(str(ctx.dir), "cache")
+        if not os.path.isdir(cache_dir):
+            return 0
+        try:
+            items = [os.path.join(cache_dir, n) for n in os.listdir(cache_dir)]
+            files = [p for p in items if os.path.isfile(p)]
+            files.sort(key=lambda p: os.path.getmtime(p))
+            if keep_last:
+                files = files[:-keep_last] if len(files) > keep_last else []
+            limit = _num("music_cache_max_mb", 200) * 1048576
+            total = sum(os.path.getsize(p) for p in files)
+            removed = 0
+            for path in files:
+                if total <= limit and not keep_last:
+                    break
+                size = os.path.getsize(path)
+                os.remove(path)
+                total -= size
+                removed += 1
+            if removed:
+                ctx.log("清理本地缓存 %d 个文件" % removed)
+            return removed
+        except Exception as e:
+            ctx.warn("清理缓存失败：%s: %s" % (type(e).__name__, e))
+            return 0
+
     async def _send_voice(gid, d):
         """把歌下载下来，当录音（语音条）发出去。失败返回 False。
 
@@ -331,6 +376,7 @@ def setup(ctx):
             if not data:
                 ctx.warn("下载音频为空")
                 return False
+            path = ""
             max_sec = _num("music_voice_max_sec", 55)
             orig_mb = len(data) / 1048576.0
             if max_sec > 0:
@@ -358,8 +404,75 @@ def setup(ctx):
                 pass
         return False
 
+    async def _send_file(gid, d):
+        """把整首 mp3 当群文件发出去（完整音质，不受语音条压缩影响）。"""
+        url = str(d.get("url") or "")
+        if not url:
+            return False
+        # 体积上限：太大会白占群文件空间，直接不发文件
+        try:
+            size_mb = float(str(d.get("size") or "0").replace("MB", "").strip() or 0)
+        except Exception:
+            size_mb = 0.0
+        cap = _num("music_file_max_mb", 20)
+        if cap > 0 and size_mb > cap:
+            ctx.log("文件 %.1fMB 超过上限 %dMB，改发卡片/链接" % (size_mb, cap))
+            return False
+
+        cache_dir = os.path.join(str(ctx.dir), "cache")
+        path = ""
+        try:
+            _prune_cache()
+            os.makedirs(cache_dir, exist_ok=True)
+            safe = re.sub(r'[\\/:*?"<>|]', "_", "%s - %s" % (d.get("song_name") or "song",
+                                                               d.get("singers") or ""))[:60]
+            path = os.path.join(cache_dir, safe + ".mp3")
+            r = await ctx.http_get(url, timeout=120)
+            r.raise_for_status()
+            data = getattr(r, "content", None)
+            if not data:
+                try:
+                    data = await r.aread()
+                except Exception:
+                    data = b""
+            if not data:
+                return False
+            with open(path, "wb") as f:
+                f.write(data)
+            ctx.log("群文件准备完毕 %.1fMB" % (len(data) / 1048576.0))
+            seg = [{"type": "file", "data": {"file": "file:///" + path.replace(os.sep, "/"),
+                                             "name": safe + ".mp3"}}]
+            res = await ctx.onebot("send_group_msg", group_id=gid, message=seg)
+            if res:
+                ctx.log("已发群文件：%s（%.1fMB）" % (safe, len(data) / 1048576.0))
+                return True
+            ctx.warn("群文件上传被拒绝")
+        except Exception as e:
+            ctx.warn("发群文件失败：%s: %s" % (type(e).__name__, e))
+        finally:
+            # 本地只在发送期间需要；上传完就删，别攒着占盘
+            try:
+                if path and os.path.isfile(path):
+                    os.remove(path)
+            except Exception:
+                pass
+        return False
+
     async def _send_card(gid, d):
         """发音乐卡片。NapCat 支持 custom 类型；失败返回 False 让调用方改发文字。"""
+        ctype = str(ctx.cfg("music_card_type") or "163").strip().lower()
+        if ctype == "163":
+            # QQ 原生网易云卡片：只要歌曲 ID，客户端自己解析播放，兼容性最好
+            sid = str(d.get("_id") or "")
+            if not sid:
+                return False
+            seg = [{"type": "music", "data": {"type": "163", "id": sid}}]
+            try:
+                res = await ctx.onebot("send_group_msg", group_id=gid, message=seg)
+            except Exception as e:
+                ctx.warn("发网易云卡片异常：%s: %s" % (type(e).__name__, e))
+                return False
+            return bool(res)
         if not d.get("url"):
             return False
         seg = [{
@@ -380,17 +493,8 @@ def setup(ctx):
             return False
         return bool(res)
 
-    async def _reply_song(event, d):
-        gid = event.group_id
-        # 顺序：语音条 -> 音乐卡片 -> 文字 + 封面
-        if _flag("music_send_voice", True) and await _send_voice(gid, d):
-            return
-        if _flag("music_voice_only", False):
-            await ctx.send_group(gid, "这首歌发不成语音条（多半超过 60 秒），换成短一点的歌试试。")
-            return
-        if _flag("music_send_card", True) and await _send_card(gid, d):
-            ctx.log("已发音乐卡片：%s" % d.get("song_name"))
-            return
+    async def _send_text(gid, d):
+        """兜底：文字摘要 + 直链 + 封面。"""
         parts = [_summary(d)]
         if d.get("url"):
             parts.append(str(d["url"]))
@@ -400,6 +504,41 @@ def setup(ctx):
                 await ctx.send_group(gid, [ctx.image(str(d["cover"]))])
             except Exception as e:
                 ctx.warn("发封面失败：%s: %s" % (type(e).__name__, e))
+
+    async def _reply_song(event, d):
+        """按 music_send_mode 决定发送方式：
+
+        voice —— 语音条。方便，但 QQ 会重编码成 silk（约 24kbps），
+                 音源再好也听不清，这是"听着不舒服"的根源。
+        card  —— 音乐卡片（默认）。QQ 内直接播放原音源，音质最好。
+        file  —— 群文件，完整 mp3，点开就是原文件。
+        text  —— 只发文字 + 直链 + 封面。
+        """
+        gid = event.group_id
+        mode = str(ctx.cfg("music_send_mode") or "card").strip().lower()
+        if mode == "voice":
+            if await _send_voice(gid, d):
+                return
+            if _flag("music_voice_only", False):
+                await ctx.send_group(gid, "这首歌发不成语音条（多半超过 60 秒），换一首短点的试试。")
+                return
+            await _send_text(gid, d)
+            return
+        if mode == "file":
+            if await _send_file(gid, d):
+                return
+            await _send_text(gid, d)
+            return
+        if mode == "text":
+            await _send_text(gid, d)
+            return
+        # card（默认）：卡片 -> 群文件 -> 文字
+        if _flag("music_send_card", True) and await _send_card(gid, d):
+            ctx.log("已发音乐卡片：%s" % d.get("song_name"))
+            return
+        if await _send_file(gid, d):
+            return
+        await _send_text(gid, d)
 
     def _lyric_text(d, limit):
         raw = str(d.get("lyric") or "").strip()
