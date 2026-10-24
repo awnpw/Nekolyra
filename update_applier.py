@@ -355,8 +355,8 @@ def preflight(install, payload, exe, allow_downgrade):
     if not os.path.isdir(os.path.join(payload, "_internal")):
         return False, "暂存目录里没有 _internal/，更新包里缺运行库"
     n_files = sum(len(fs) for _r, _d, fs in os.walk(payload))
-    if n_files < 20:
-        return False, "暂存目录只有 %d 个文件，明显不完整" % n_files
+    if n_files < 100:
+        return False, "暂存目录只有 %d 个文件，明显不完整（正常安装包 800+）" % n_files
     new_v, new_txt = read_version(payload)
     old_v, old_txt = read_version(install)
     if new_v and old_v and new_v < old_v and not allow_downgrade:
@@ -505,8 +505,15 @@ def main():
         return 6
 
     staged_files = sum(len(fs) for _r, _d, fs in os.walk(stage))
+    payload_files = sum(len(fs) for _r, _d, fs in os.walk(payload))
     if staged_files < 20 or not os.path.isfile(os.path.join(stage, a.exe)):
         log("暂存区不完整（%d 个文件），放弃" % staged_files)
+        force_remove(stage)
+        journal_clear(install)
+        return 6
+    if staged_files != payload_files:
+        log("暂存复制后对账失败：payload %d 个文件，暂存区 %d 个，放弃本次更新"
+            % (payload_files, staged_files))
         force_remove(stage)
         journal_clear(install)
         return 6
@@ -529,6 +536,14 @@ def main():
 
     # --- 2) 换名（原子）---
     kill_processes_under(install)      # 任何还占着安装目录的残留进程，先清掉
+    # 换名前记下每个条目应有的文件数：rename 是原子的，但"暂存区本身是不是完整"
+    # 只有事后对账才知道。少了就整体回滚，绝不让半截目录上线。
+    expect = {}
+    for it in plan:
+        src = os.path.join(payload, it["name"])
+        expect[it["name"]] = (sum(len(fs) for _r, _d, fs in os.walk(src))
+                              if os.path.isdir(src) else 1)
+    log("预期文件数：" + "，".join("%s=%d" % (k, v) for k, v in expect.items()))
     journal_write(install, {"phase": "swap", "stamp": stamp, "stage": stage, "items": plan})
     swapped = []
     for it in plan:
@@ -546,7 +561,23 @@ def main():
             _undo(install, swapped)
             force_remove(stage)
             return 5
-    log("换名完成：%d 个条目已切换到新版" % len(plan))
+    # 对账：每个条目实际到位的文件数必须与预期一致
+    bad = []
+    for it in plan:
+        live = it["live"]
+        got = (sum(len(fs) for _r, _d, fs in os.walk(live))
+               if os.path.isdir(live) else (1 if os.path.isfile(live) else 0))
+        want = expect.get(it["name"], 0)
+        if got != want:
+            bad.append("%s：预期 %d 个文件，实际 %d 个" % (it["name"], want, got))
+    if bad:
+        log("换名后对账失败：" + "；".join(bad))
+        log("正在整体回滚……")
+        _undo(install, list(plan))
+        force_remove(stage)
+        journal_clear(install)
+        return 7
+    log("换名完成：%d 个条目已切换到新版（文件数对账通过）" % len(plan))
 
     # --- 3) 验收 ---
     journal_write(install, {"phase": "verify", "stamp": stamp, "stage": stage,
