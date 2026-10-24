@@ -896,6 +896,23 @@ class Database:
         with self._conn() as c:
             return [dict(r) for r in c.execute(sql, tuple(args)).fetchall()]
 
+    def sticker_candidates(self, tags, limit=40):
+        """命中**任意一个**标签的全部候选（不再"第一个有货的标签就返回"）。
+
+        为什么要换：sticker_by_tags 按标签优先级短路，热标签（搞笑 83 张）几乎
+        总是赢，冷门但更贴切的表情永远轮不到，表现就是"老是那几张"。
+        """
+        tags = [str(t or "").strip() for t in (tags or [])]
+        tags = [t for t in tags if t]
+        if not tags:
+            return []
+        where = " OR ".join(["tags LIKE ?"] * len(tags))
+        args = ["%" + t + "%" for t in tags]
+        sql = "SELECT * FROM stickers WHERE (%s) ORDER BY RANDOM() LIMIT ?" % where
+        args.append(int(limit))
+        with self._conn() as c:
+            return [dict(r) for r in c.execute(sql, tuple(args)).fetchall()]
+
     def sticker_by_tags(self, tags, kind="", limit=4):
         r"""按标签挑表情：按优先级逐个标签试，第一个有货的标签返回它的候选。
 

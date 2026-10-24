@@ -1,0 +1,94 @@
+{
+  "name": "music",
+  "display_name": "网易云解析",
+  "version": "1.0.0",
+  "author": "Nekolyra",
+  "description": "解析网易云音乐分享链接或歌曲 ID：歌名、歌手、专辑、封面、直链、音质、歌词。支持自动识别群里的网易云链接。",
+  "entry": "main.py",
+  "tags": [
+    "工具",
+    "音乐"
+  ],
+  "api_version": "1.0",
+  "permissions": [
+    "http",
+    "send",
+    "config",
+    "fs"
+  ],
+  "defaults": {
+    "music_api_url": "https://api.pearapi.ai/api/cloudmusic/",
+    "music_auto_parse": true,
+    "music_send_card": true,
+    "music_cover": true,
+    "music_lyric_lines": 12,
+    "music_cache_ttl": 300,
+    "music_send_voice": true,
+    "music_voice_only": false,
+    "music_voice_max_sec": 0,
+    "music_search_limit": 5,
+    "music_pick_ttl": 120
+  },
+  "config": [
+    {
+      "title": "网易云解析",
+      "fields": [
+        [
+          "music_api_url",
+          "解析接口地址",
+          "text"
+        ],
+        [
+          "music_auto_parse",
+          "自动识别群里的网易云链接",
+          "bool"
+        ],
+        [
+          "music_send_voice",
+          "优先把歌发成语音条（录音）",
+          "bool"
+        ],
+        [
+          "music_voice_only",
+          "只发语音条（失败也不发链接）",
+          "bool"
+        ],
+        [
+          "music_voice_max_sec",
+          "语音条最长秒数（0 = 发完整版）",
+          "number"
+        ],
+        [
+          "music_send_card",
+          "优先发音乐卡片（失败自动改发文字）",
+          "bool"
+        ],
+        [
+          "music_cover",
+          "随文字发送封面图",
+          "bool"
+        ],
+        [
+          "music_lyric_lines",
+          "「歌词」默认显示行数",
+          "number"
+        ],
+        [
+          "music_cache_ttl",
+          "同一首歌缓存秒数（0 = 不缓存）",
+          "number"
+        ],
+        [
+          "music_search_limit",
+          "按歌名搜索时列出几个版本",
+          "number"
+        ],
+        [
+          "music_pick_ttl",
+          "回数字选的有效秒数",
+          "number"
+        ]
+      ]
+    }
+  ]
+}

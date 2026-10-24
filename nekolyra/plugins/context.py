@@ -149,6 +149,13 @@ class PluginContext:
         self.enabled = True
         self.error = ""
         self.activated = False      # setup() 是否已经执行过
+        #: setup() 想建后台任务、但此刻还没有事件循环时先存这里，
+        #: 等核心把主循环跑起来后由 start_deferred_plugin_tasks() 统一拉起。
+        #: （2026-10-24 修：插件以前在 setup() 里直接 create_task，
+        #:   get_running_loop() 抛 RuntimeError 被 except 吞掉，
+        #:   结果朋友圈、晨昏播报的后台循环从来没启动过。）
+        self.deferred = []
+        self.task_started = False
         self._pending_setup = None  # 扫描阶段先存着，核心就绪后再调
         self.order = 100
 
@@ -186,6 +193,26 @@ class PluginContext:
         CFG[key] = value
         _PLUGIN_KEYS.add(key)
         save_config()
+
+    def spawn(self, coro_fn):
+        """起一个插件后台任务：有循环立刻起，没有就排队等核心拉起。
+
+        插件作者写 ctx.spawn(协程函数) —— 传函数，不要传协程对象。
+        返回 Task，或 None（None 表示已排队，等主循环就绪）。
+        """
+        import asyncio as _a
+        try:
+            loop = _a.get_running_loop()
+        except RuntimeError:
+            self.deferred.append(coro_fn)
+            return None
+        try:
+            task = loop.create_task(coro_fn())
+        except Exception as e:
+            self.warn("后台任务启动失败：%s: %s" % (type(e).__name__, e))
+            return None
+        self.task_started = True
+        return task
 
     # ---------------- 注册能力 ----------------
     def command(self, cmd, help="", prefix=False, timeout=None):

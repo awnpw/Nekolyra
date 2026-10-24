@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Nekolyra 帮助文档</title>
+<style>
+  :root{
+    --ink:#0a0e1a; --text:#22283a; --text-2:#4e556b; --text-3:#7b8299;
+    --bg:#f7f9fd; --card:#fff; --line:#e6eaf4; --blue:#2f6fed; --blue-soft:rgba(47,111,237,.09);
+    --shadow:0 1px 2px rgba(16,24,40,.04),0 12px 32px -12px rgba(16,24,40,.12);
+  }
+  @media (prefers-color-scheme: dark){
+    :root{--ink:#eef3fb;--text:#dbe3f3;--text-2:#a9b4cc;--text-3:#7f8aa6;
+      --bg:#0b1120;--card:#121a2e;--line:#1e2942;--blue:#6aa9ff;--blue-soft:rgba(106,169,255,.13);
+      --shadow:0 1px 2px rgba(0,0,0,.3),0 16px 40px -16px rgba(0,0,0,.6);}
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:system-ui,-apple-system,"Segoe UI","Microsoft YaHei",sans-serif;
+    background:var(--bg);color:var(--text);line-height:1.75;-webkit-font-smoothing:antialiased}
+  .wrap{max-width:860px;margin:0 auto;padding:0 20px 60px}
+  header{padding:44px 0 26px;border-bottom:1px solid var(--line);margin-bottom:34px}
+  h1{font-size:clamp(24px,4vw,32px);color:var(--ink);letter-spacing:-.02em}
+  .sub{color:var(--text-3);font-size:13.5px;margin-top:8px}
+  h2{font-size:19px;color:var(--ink);margin:42px 0 12px;padding-top:14px;border-top:1px solid var(--line)}
+  h2:first-of-type{border-top:none;margin-top:0}
+  h3{font-size:15px;color:var(--ink);margin:22px 0 8px}
+  p,li{font-size:14px;color:var(--text-2)}
+  ul,ol{margin:8px 0 8px 22px}
+  li{margin:4px 0}
+  code{background:var(--blue-soft);color:var(--blue);padding:1px 6px;border-radius:5px;
+    font-family:ui-monospace,Consolas,monospace;font-size:12.5px}
+  table{width:100%;border-collapse:collapse;margin:10px 0 6px;font-size:13px;
+    background:var(--card);border:1px solid var(--line);border-radius:10px;overflow:hidden}
+  th,td{padding:9px 12px;text-align:left;border-bottom:1px solid var(--line);vertical-align:top}
+  th{font-size:12px;color:var(--text-3);font-weight:600;background:color-mix(in srgb,var(--line) 30%,transparent)}
+  tr:last-child td{border-bottom:none}
+  td:first-child{white-space:nowrap;color:var(--ink);font-weight:600}
+  .note{background:var(--card);border:1px solid var(--line);border-left:3px solid var(--blue);
+    border-radius:8px;padding:12px 15px;margin:12px 0;font-size:13px;color:var(--text-2)}
+  .demo{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:14px 16px;
+    font-size:13px;line-height:1.9;color:var(--text-2);white-space:pre-wrap;margin:12px 0;
+    font-family:ui-monospace,Consolas,"Microsoft YaHei",monospace}
+  footer{margin-top:46px;padding-top:18px;border-top:1px solid var(--line);
+    font-size:12.5px;color:var(--text-3)}
+  .tag{display:inline-block;padding:1px 7px;border-radius:6px;font-size:11px;
+    background:var(--blue-soft);color:var(--blue);margin-left:6px}
+  @media print{ body{background:#fff} h2{page-break-after:avoid} table{page-break-inside:avoid} }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <h1>Nekolyra 帮助文档</h1>
+  <p class="sub">这是一份离线单文件文档：不用联网、不用 GitHub，双击就能看。也可以直接发给群友。</p>
+</header>
+
+<h2>一、先搞清三件事</h2>
+<table>
+  <tr><th>事情</th><th>说明</th></tr>
+  <tr><td>它是什么</td><td>跑在群主自己电脑上的 QQ 群 AI 机器人。数据都在那台机器上，不上传云端。</td></tr>
+  <tr><td>怎么叫它</td><td>三种都算：真的 @ 它、在消息里写它的名字（如「卡提希娅 签到」）、或者 @ 名字打成纯文本（会自动兼容）。</td></tr>
+  <tr><td>发「帮助」</td><td>它会回一张<b>指令一览图</b>，不用记命令。下图内容与本文件一致。</td></tr>
+</table>
+
+<h2>二、指令一览</h2>
+<p>命令是<b>精确匹配整条消息</b>的：发「签到」有效，发「我想签到一下」不会触发（那种会交给 AI 聊天）。带参数的命令用空格分开。</p>
+
+<h3>签到 / 积分 <span class="tag">签到积分</span></h3>
+<table>
+  <tr><td>签到 / 打卡 / 我的签到</td><td>每日签到拿积分</td></tr>
+  <tr><td>我的积分</td><td>查自己的积分余额</td></tr>
+  <tr><td>签到排行 / 签到榜 / 排行榜 / 积分榜</td><td>看群内排行</td></tr>
+  <tr><td>清积分 / 清空积分</td><td>管理员用，清空本群积分</td></tr>
+</table>
+
+<h3>今日老婆 <span class="tag">今日老婆</span></h3>
+<table>
+  <tr><td>今日老婆 / 抽老婆 / 我要老婆 / 我的老婆</td><td>抽今天的「老婆」，带 AI 写的介绍</td></tr>
+  <tr><td>换老婆 / 换个老婆 / 换一个老婆 / 再换老婆 / 再换一个 / 换lp / 换LP / 换Lp</td><td>用积分换一个（每天有次数上限，见配置）</td></tr>
+</table>
+
+<h3>群报 <span class="tag">群报</span></h3>
+<table>
+  <tr><td>群报 / 群日报 / 群报告 / 群总结</td><td>今天的发言排行</td></tr>
+  <tr><td>今天群报 / 今日群报 / 日报 / 今日日报 …</td><td>同上，共 26 个写法都认（今天 / 今日 / 昨天 / 昨日 × 群报 / 日报 / 战报 / 报告 / 总结）</td></tr>
+</table>
+
+<h3>点歌 / 网易云解析 <span class="tag">网易云解析</span></h3>
+<table>
+  <tr><td>点歌 歌名</td><td>按歌名搜，出多个版本让你回数字选，然后把歌发成<b>语音条</b></td></tr>
+  <tr><td>点歌 &lt;链接 或 歌曲ID&gt;</td><td>跳过搜索，直接解析并发歌</td></tr>
+  <tr><td>网易云 &lt;链接 或 歌曲ID&gt;</td><td>同上</td></tr>
+  <tr><td>歌词 歌名 / 链接 / ID</td><td>歌名 + 前 12 行歌词</td></tr>
+  <tr><td>（直接贴网易云分享链接）</td><td>自动识别并解析</td></tr>
+</table>
+<div class="note">
+  点歌示例：<br>
+  ① 你发 <code>点歌 起风了</code> → 她回 5 个版本编号；<br>
+  ② 你回一个数字（<code>2</code>，120 秒内有效）→ 她回「选中：…」并发出语音条。<br>
+  只发起点歌的那个人的数字有效，别人打数字不会抢。
+</div>
+
+<h3>朋友圈 <span class="tag">朋友圈</span></h3>
+<table>
+  <tr><td>发说说</td><td>让她现在就想一条并发到 QQ 空间（管理员）</td></tr>
+  <tr><td>说说预览</td><td>只看她会写什么，不真的发</td></tr>
+  <tr><td>最近的说说</td><td>看已发过的若干条</td></tr>
+</table>
+<p>平时不用管：她自己决定什么时候发、写什么、下次多久之后再想，代码里没有随机数。</p>
+
+<h3>晨昏播报 <span class="tag">晨昏播报</span></h3>
+<table>
+  <tr><td>早安 / 晚安</td><td>手动触发一次播报</td></tr>
+  <tr><td>设置城市 城市名</td><td>改天气用的城市</td></tr>
+  <tr><td>播报状态 / 播报测试</td><td>看定时状态 / 立即试一次</td></tr>
+</table>
+
+<h3>游戏库 <span class="tag">游戏库</span></h3>
+<table>
+  <tr><td>游戏库</td><td>看已索引的群文件游戏</td></tr>
+  <tr><td>扫游戏库 / 重扫游戏库</td><td>重建索引（扫群文件，较慢）</td></tr>
+</table>
+
+<h3>生词本 / lexicon <span class="tag">lexicon</span></h3>
+<table>
+  <tr><td>教 &lt;词&gt; &lt;解释&gt;</td><td>教她一个新词，写进知识库</td></tr>
+  <tr><td>词典 &lt;词&gt;</td><td>查她学过的词</td></tr>
+  <tr><td>忘掉 &lt;词&gt;</td><td>删掉某个词</td></tr>
+</table>
+
+<h3>其它</h3>
+<table>
+  <tr><td>抽奖</td><td>从最近活跃的群成员里随机抽一个</td></tr>
+  <tr><td>你好 / 插件测试</td><td>示例插件，用来验证插件系统是否工作</td></tr>
+</table>
+
+<h2>三、常见问题</h2>
+
+<h3>发了不回复？</h3>
+<ul>
+  <li>确认是在<b>叫它</b>（@ 或写名字）——群里随口说话它不一定接</li>
+  <li>命令要<b>精确</b>：<code>签到</code> 可以，<code>我要签到了</code> 不行（那种走 AI）</li>
+  <li>它可能被停用了，看管理页的插件卡片</li>
+</ul>
+
+<h3>换老婆没反应？</h3>
+<ul>
+  <li>先看积分够不够（<code>我的积分</code>），换一次要消耗积分</li>
+  <li>每天换的次数有上限（默认 200）</li>
+  <li>如果回的是 AI 聊天内容，说明命令没匹配上——把原话和管理页日志发给群主</li>
+</ul>
+
+<h3>语音条只播一分钟 / 发不出来？</h3>
+<ul>
+  <li>QQ 客户端对语音条本身有播放上限，长歌会被截断，这是 QQ 的限制</li>
+  <li>发不出来时插件会自动改发音乐卡片或链接</li>
+</ul>
+
+<h3>说说没发出来？</h3>
+<ul>
+  <li>她的节奏由模型决定，可能决定「这次不发」</li>
+  <li>协议端的空间接口偶尔失败，看管理页日志里的「发说说失败」</li>
+</ul>
+
+<h3>我自己能改什么？</h3>
+<p>插件卡片上点「配置」就能改，比如：点歌是否发语音条、语音最长多少秒、老婆每天能换几次、播报时间与城市、表情自动发送的概率等。改完不用重启。</p>
+
+<h2>四、给群主（管理员）</h2>
+<ul>
+  <li><b>管理页</b>：程序启动后打开 <code>http://127.0.0.1:8080/admin/</code>，第一次要带 token（在程序目录的 <code>config.json</code> 里，字段 <code>admin_token</code>）</li>
+  <li><b>插件</b>：管理页「插件」页可以启用 / 停用 / 配置 / 重新加载；改完插件代码点「重新加载」即可，不用重启</li>
+  <li><b>更新</b>：管理页「检查更新」→ 下载 → 覆盖更新；失败会自动回滚到上一版，日志在 <code>data/updates/update.log</code></li>
+  <li><b>备份</b>：把整个 <code>data/</code> 目录拷走即可（数据库、插件、表情、配置都在这）</li>
+  <li><b>日志</b>：<code>startup.log</code>；每条消息有追踪 id，排查时按 id 搜最快</li>
+</ul>
+
+<footer>
+  Nekolyra 是独立项目，与腾讯 / QQ 官方无关。<br>
+  本文件为离线单文件，可自由转发给群友；在线版：awnpw.github.io/Nekolyra/（需要能访问 GitHub）
+</footer>
+
+</div>
+</body>
+</html>

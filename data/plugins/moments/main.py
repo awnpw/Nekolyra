@@ -304,19 +304,22 @@ def setup(ctx):
                 await asyncio.sleep(120)
 
     def _ensure_task():
-        if _STATE["task"] is not None and not _STATE["task"].done():
+        # 2026-10-24 修：这段原来在 setup() 里直接 get_running_loop().create_task()，
+        # 但 setup() 是模块导入期同步执行的，那时没有事件循环 -> RuntimeError ->
+        # 被外层 try/except 吞掉，后台循环从未启动（startup.log 里一条"已启用"都没有）。
+        # 改用 ctx.spawn()：有循环立刻起，没有就排队，主循环就绪后由核心统一拉起。
+        if _STATE.get("started"):
             return
-        try:
-            loop = asyncio.get_running_loop()
-        except RuntimeError:
+        _STATE["started"] = True
+        task = ctx.spawn(_loop)
+        _STATE["task"] = task
+        if task is None:
+            ctx.log("朋友圈：已排队，等主循环就绪后启动")
             return
-        _STATE["task"] = loop.create_task(_loop())
+        return
         ctx.log("朋友圈已启用：什么时候发由她自己想")
 
-    try:
-        _ensure_task()
-    except Exception:
-        pass
+    _ensure_task()
 
     def _super_ok(event):
         try:

@@ -170,7 +170,7 @@
     <div class="card"><div class="ic">📚</div><h3>知识库</h3>
       <p>分文件夹、带去重、按群隔离。她查得到，你管得住。</p></div>
     <div class="card"><div class="ic">🎭</div><h3>表情库</h3>
-      <p>群里收图 → 视觉模型写描述 → 按情绪打标 → 回话时按语气挑一张发出去。</p></div>
+      <p>群里收图 → 视觉模型写描述 → 打情绪标签。回话时按「标签 + 画面描述」打分挑图：截图、表格这类素材会被自动排掉，最近发过的不重复。</p></div>
     <div class="card"><div class="ic">🛡️</div><h3>群管与风控</h3>
       <p>入群验证、黑名单、广告拦截（关键词 / 黑域名）、撤回与踢人，含自带管理页。</p></div>
     <div class="card"><div class="ic">🔊</div><h3>语音合成</h3>
@@ -181,6 +181,8 @@
       <p>原生窗口里的单页应用，跟 OneBot 接口共用同一个端口，所有接口都要 token。</p></div>
     <div class="card"><div class="ic">📋</div><h3>指令一览图</h3>
       <p>群里发「帮助」，她回一张自动分页的指令图，不用记命令。</p></div>
+    <div class="card"><div class="ic">🎧</div><h3>点歌发语音条</h3>
+      <p>点歌 → 列出同名版本，回数字选 → 直接把歌发成语音条。贴网易云链接或歌曲 ID 也能解析。</p></div>
   </div>
 </section>
 
@@ -215,7 +217,7 @@
 
 <section id="plugins" class="wrap">
   <h2>插件</h2>
-  <p class="sub">随仓库发布 11 个，都能在管理页里停用或卸载。写自己的插件只要一个目录两个文件。</p>
+  <p class="sub">随仓库发布 12 个，都能在管理页里停用或卸载。写自己的插件只要一个目录两个文件。<br><span style="color:var(--text-3)">群里发「帮助」会回一张指令一览图；<a href="help.html">完整帮助文档</a>（离线单文件，见页面底部）</span></p>
   <table class="tbl">
     <thead><tr><th>插件</th><th>做什么</th><th>标签</th></tr></thead>
     <tbody>
@@ -230,6 +232,7 @@
       <tr><td>群报</td><td>统计群里某天的发言排行</td><td><span class="tag">统计</span></td></tr>
       <tr><td>生词本</td><td>遇到不懂的词主动问，有人解释就记住并写进知识库</td><td><span class="tag">学习</span></td></tr>
       <tr><td>打招呼</td><td>示例插件：被 @ 时回一句问候，改它就能写出第一个插件</td><td><span class="tag">示例</span></td></tr>
+      <tr><td>网易云解析</td><td>点歌：按歌名搜出版本列表，回数字选一个，直接把歌发成语音条；也能解析分享链接、歌曲 ID 和歌词</td><td><span class="tag">工具</span><span class="tag">音乐</span></td></tr>
     </tbody>
   </table>
   <p class="sub" style="margin:18px 0 0">插件开发文档：<a href="https://github.com/awnpw/Nekolyra/blob/main/docs/插件开发.md">插件开发</a> · 配置项：<a href="https://github.com/awnpw/Nekolyra/blob/main/docs/配置项.md">配置项</a></p>
@@ -260,6 +263,7 @@
       <a href="https://github.com/awnpw/Nekolyra/blob/main/docs/插件开发.md">插件开发</a>
       <a href="https://github.com/awnpw/Nekolyra/blob/main/docs/常见问题.md">常见问题</a>
       <a href="https://github.com/awnpw/Nekolyra/blob/main/CHANGELOG.md">更新日志</a>
+      <a href="help.html">帮助文档</a>
       <a href="https://github.com/awnpw/Nekolyra/blob/main/LICENSE">GPL-3.0</a>
     </div>
     <div class="note">

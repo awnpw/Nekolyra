@@ -4,7 +4,7 @@
 
 
 import contextvars
-import os, sys, re, json, time, socket, random, asyncio, threading, shutil, hashlib, base64, traceback, functools
+import os, sys, re, json, time, socket, random, asyncio, threading, shutil, hashlib, base64, traceback, functools, math, collections
 import subprocess, tempfile, zipfile
 from typing import Optional
 from collections import deque
@@ -1530,6 +1530,50 @@ def _at_is_self_bot(seg, bot_self_id) -> bool:
     data = getattr(seg, "data", None) or {}
     qq = str(data.get("qq") or "").strip()
     return bool(qq) and qq == str(bot_self_id).strip()
+
+
+def _self_names(gid=None) -> list:
+    """机器人自己的名字：全局 persona_name + 该群 persona_overrides 里的名字。"""
+    names = []
+    try:
+        names.append(cfg_str("persona_name", "").strip())
+    except Exception:
+        pass
+    try:
+        ov = CFG.get("persona_overrides") or {}
+        if gid:
+            nm = ((ov.get("g:%s" % gid) or {}).get("name") or "").strip()
+            if nm:
+                names.append(nm)
+    except Exception:
+        pass
+    return [n for n in dict.fromkeys(names) if n]
+
+
+def strip_cmd_prefix(cmd, names):
+    """把「@卡提希娅 换老婆」「卡提希娅 换老婆」的前缀剥掉，只留命令本体。
+
+    为什么需要（2026-10-24 实测）：群里有人把 @机器人 当**纯文本**打出来
+    （不是真的 at 段），明文就成了 "@卡提希娅 换老婆"，而命令是精确匹配整条消息的
+    —— 于是「换老婆」查不到，静默掉进 AI 对话（日志里显示"提及名字"）。
+    只剥**机器人自己**的名字，不动别人的 @：
+      "@卡提希娅 踢 @某人" -> "踢 @某人"
+    """
+    import re as _re
+    t = str(cmd or "").strip()
+    for nm in (names or []):
+        nm = str(nm or "").strip()
+        if not nm:
+            continue
+        for pat in ("@" + nm, nm):
+            if t.startswith(pat):
+                rest = t[len(pat):].lstrip(" \t\u3000:：,，、~～")
+                if rest:
+                    return rest
+    m = _re.match(r"^@(\S{1,20})[ \t\u3000]+(\S.*)$", t)
+    if m:
+        return m.group(2).strip()
+    return t
 
 
 def plaintext_with_at(event, skip_self_id=None) -> str:
@@ -3156,18 +3200,98 @@ def sticker_file_url(row):
     return "file:///" + p.replace(os.sep, "/")
 
 
+#: 最近自动发过的表情 id —— 防止同一张反复刷（"表情包老是那几张"）
+_STICKER_RECENT = collections.deque(maxlen=6)
+#: 标签词频缓存：(tick 秒, Counter)
+_STICKER_FREQ = {"at": 0.0, "freq": None}
+
+#: 视觉描述里"这不是表情，是截图/界面/表格"的特征 —— 这类图发出去最莫名
+_STICKER_NOT = re.compile(r"截图|界面|数据明细|报表|统计|表格|文档|聊天记录|文字为主|窗口|菜单")
+#: 真正的表情素材特征
+_STICKER_IS = re.compile(r"表情包|Q版|q版|emoji|Emoji|二次元|卡通|梗图|贴纸|动图")
+
+
+def _sticker_tag_freq():
+    """标签词频：稀有标签更值钱，避免"搞笑"这种大词一统天下。5 分钟刷新一次。"""
+    now = time.time()
+    if _STICKER_FREQ["freq"] is not None and now - _STICKER_FREQ["at"] < 300:
+        return _STICKER_FREQ["freq"]
+    cnt = collections.Counter()
+    try:
+        for row in DB.sticker_list(limit=5000):
+            for t in re.split(r"[,，、\s]+", str(row.get("tags") or "")):
+                t = t.strip()
+                if t:
+                    cnt[t] += 1
+    except Exception:
+        pass
+    _STICKER_FREQ["freq"] = cnt
+    _STICKER_FREQ["at"] = now
+    return cnt
+
+
+def _sticker_score(row, wanted, reply_text="", recent=(), tag_freq=None):
+    """给一张表情打分，返回 (分数, 说明)；标签没命中返回 (None, 原因)。
+
+    用户反馈"只看标签、不看介绍，容易乱用"，所以这里：
+      1. 标签命中仍然是**门槛**（note 只做加减，绝不单独决定，
+         否则又会回到"画面里有文字就撞上内容词"的老问题）；
+      2. note 写着截图/界面/报表的重罚 —— 这类图当反应最莫名；
+      3. note 写着表情包/Q版/emoji 的加分 —— 这才是拿来当反应的素材；
+      4. 回复正文里的词出现在 note 里给少量加分（这就是"看介绍"）；
+      5. 最近发过的重罚，避免连发同一张；use_count 越多扣越多，冷门好图也能轮到。
+    """
+    tag_list = [t.strip() for t in re.split(r"[,，、\s]+", str(row.get("tags") or "")) if t.strip()]
+    hits = [t for t in (wanted or []) if t in tag_list]
+    if not hits:
+        return None, "无标签命中"
+    note = str(row.get("note") or "")
+
+    freq = tag_freq or {}
+    total = max(sum(freq.values()), 1)
+    score = 0.0
+    for t in hits:
+        w = 3.0 * (1.0 + math.log(max(total * 0.02, 1.0) / max(freq.get(t, 1), 1)))
+        score += max(1.2, min(w, 5.0))
+    reasons = ["标签 " + "/".join(hits)]
+
+    if str(row.get("kind") or "") == "sticker":
+        score += 1.0          # 优先真表情，其次图片
+    if _STICKER_NOT.search(note):
+        score -= 9.0
+        reasons.append("像截图/界面 -9")
+    if _STICKER_IS.search(note):
+        score += 1.5
+        reasons.append("是表情素材 +1.5")
+
+    words = re.findall(r"[\u4e00-\u9fa5]{2,4}", str(reply_text or ""))[:8]
+    matched = [w for w in words if w in note]
+    if matched:
+        bonus = min(len(matched) * 0.8, 2.0)
+        score += bonus
+        reasons.append("介绍匹配 %s +%.1f" % ("/".join(matched[:3]), bonus))
+
+    if row.get("id") in set(recent):
+        score -= 6.0
+        reasons.append("最近发过 -6")
+    uc = int(row.get("use_count") or 0)
+    if uc:
+        pen = min(uc * 0.25, 3.0)
+        score -= pen
+        reasons.append("用过%d次 -%.1f" % (uc, pen))
+    score += random.uniform(0, 0.9)
+    return score, "；".join(reasons)
+
+
 async def auto_pick_sticker(reply_text, chance=None):
-    r"""按机器人这句话的情绪，从库里自动挑一张。
+    r"""按机器人这句话的情绪，从库里挑一张表情。
 
-    **不再指望模型自己写 [表情:xx]** —— 实测 40 条回复里 0 条带标记：
-    人格提示词里写死了「不要输出括号说明、旁白」，模型不会主动加这种标记，
-    我等于是在跟自己的提示词打架。
-
-    所以反过来做：用机器人**已经生成好的那句话**去判断情绪（tags_from_chat），
-    再从库里按标签匹配 —— 打标和判断语气用的是**同一套词表**，天然对得上。
-    注意别用 emotion_tags_for：那个是「画面描述 → 标签」，输入性质不一样。
-
-    chance 是概率门槛 —— 每句话都配表情会很吵，默认只用配置里那个 0.25。
+    挑选规则（2026-10-24 重做，对应用户反馈"只看标签不看介绍，容易乱用"）：
+      1. tags_from_chat 从**已经生成好的回复**里提取情绪词（和打标同一套词表）；
+      2. 取**所有**命中任一情绪的候选（不再是"第一个有货的标签就返回"）；
+      3. 逐张打分：标签稀有度 + note 是否像截图/是否像表情 + 回复里的词是否出现在
+         note 里（"看介绍"）+ 最近是否发过 + 用过几次；
+      4. 分数不到 2.0 就不发 —— 宁可没有表情，也别乱发一张。
     """
     try:
         if not (cfg_bool("sticker_enabled", True)
@@ -3189,18 +3313,28 @@ async def auto_pick_sticker(reply_text, chance=None):
         if not tags:
             return None
         wanted = [t.strip() for t in tags.split(",") if t.strip()]
-        # 只按**标签**匹配，且优先「表情」类，其次「图片」类。
-        # 以前还会退到 note（视觉描述）里搜关键词：情绪词能在"画里有什么"那种
-        # 描述里撞上内容词，于是把游戏 UI 截图之类当配图发出去 —— 就是"好奇怪"。
-        cands = DB.sticker_by_tags(wanted, kind="sticker", limit=4)
+        cands = DB.sticker_candidates(wanted, limit=40)
         if not cands:
-            cands = DB.sticker_by_tags(wanted, limit=4)
-        if not cands:
-            # 没有标签匹配就干脆不发：随机抽一张正是"表情包好奇怪"的来源。
             log("info", "表情库", f"自动挑：没有标签匹配（情绪 {tags}），这次不发")
             return None
-        row, hit = random.choice(cands)
-        log("block", "表情库", f"自动挑中 id={row['id']}（标签「{hit}」← {tags}）")
+
+        freq = _sticker_tag_freq()
+        recent = tuple(_STICKER_RECENT)
+        scored = []
+        for row in cands:
+            s, why = _sticker_score(row, wanted, txt, recent=recent, tag_freq=freq)
+            if s is not None:
+                scored.append((s, row, why))
+        if not scored:
+            return None
+        scored.sort(key=lambda x: -x[0])
+        best, row, why = scored[0]
+        if best < 2.0:
+            log("info", "表情库", f"自动挑：最高分 {best:.1f} 不到门槛，这次不发（{why}）")
+            return None
+        _STICKER_RECENT.append(row.get("id"))
+        log("block", "表情库",
+            f"自动挑中 id={row['id']}（{best:.1f} 分｜{why}｜{len(scored)} 张候选）")
         return row
     except Exception as e:
         log("warn", "表情库", f"自动挑失败: {type(e).__name__}: {e}")
@@ -3996,6 +4130,33 @@ def activate_all_plugins():
     if n:
         log("info", "插件", f"初始化完成：{n} 个插件已就绪")
     return n
+
+
+def start_deferred_plugin_tasks():
+    """把插件在 setup() 阶段排队的后台任务真正拉起来。
+
+    为什么需要：setup() 在模块导入期同步执行，那里没有事件循环，
+    插件里直接 asyncio.get_running_loop().create_task(...) 必然抛 RuntimeError；
+    以前各插件用 try/except 把异常吞了，于是朋友圈、晨昏播报的后台循环从未启动
+    （2026-10-24 从 startup.log 里"朋友圈已启用"一条都没有确认）。
+    现在插件用 ctx.spawn()，没循环时排队，主循环就绪后在这里统一创建。
+    """
+    started = 0
+    for ctx in list(PLUGINS.values()):
+        pending = list(getattr(ctx, "deferred", []) or [])
+        if not pending:
+            continue
+        ctx.deferred = []
+        for fn in pending:
+            try:
+                asyncio.get_event_loop().create_task(fn())
+                ctx.task_started = True
+                started += 1
+            except Exception as e:
+                log("error", "插件", f"{ctx.display_name} 后台任务启动失败：{type(e).__name__}: {e}")
+    if started:
+        log("info", "插件", f"已拉起 {started} 个插件后台任务")
+    return started
 
 
 def load_all_plugins():
@@ -6869,11 +7030,19 @@ async def _on_ai(bot: Bot, event: GroupMessageEvent):
     to_me = _inc.to_me
     name = cfg_str("persona_name").strip()
 
-    if to_me and raw_text:
+    if raw_text:
+        # 命令分发的两个坑（2026-10-24 实测）：
+        #   1) 只判 to_me（真 at 段）—— 用户把 @名字 打成纯文本时 to_me 为假，
+        #      整个命令分发被跳过，消息掉进 AI（日志里那种「提及名字」就是它）；
+        #   2) 明文里带着 "@卡提希娅 " 前缀，命令是精确匹配整条消息，还是查不到。
+        # 所以：名字开头也算被呼叫，并且先把机器人自己的名字前缀剥掉。
         cmd = raw_text.strip()
-        handled = await handle_group_command(bot, event, cmd)
-        if handled:
-            return
+        _stripped = strip_cmd_prefix(cmd, _self_names(gid))
+        if to_me or _stripped != cmd:
+            handled = await handle_group_command(bot, event, _stripped)
+            if handled:
+                return
+            cmd = _stripped
 
     _d = should_reply(
         _inc,
@@ -8827,6 +8996,8 @@ def run_server():
         asyncio.set_event_loop(loop)
         MAIN_LOOP = loop
         MAIN_LOOP_READY.set()
+        # 插件在 setup() 阶段排队的后台任务，现在有循环了，拉起来
+        loop.call_soon(start_deferred_plugin_tasks)
         config = uvicorn.Config(asgi, host=_bind_host(), port=PORT,
                                 log_level="warning", access_log=False)
         server = uvicorn.Server(config)
