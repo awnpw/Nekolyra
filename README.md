@@ -2,7 +2,7 @@
 
 带 AI 人格的 QQ 群机器人。装在自己机器上，双击就能跑，数据全在本地。
 
-[![管理台](docs/screenshots/hero.png)](docs/screenshots/01-概览.png)
+[![管理台](docs/screenshots/hero.webp)](docs/screenshots/01-概览.webp)
 
 ![Python](https://img.shields.io/badge/Python-3.12%2B-3776ab?logo=python&logoColor=white)
 [![License](https://img.shields.io/badge/License-GPL--3.0-blue)](LICENSE)
@@ -51,9 +51,9 @@ docker compose up -d
 
 | | |
 |---|---|
-| ![概览](docs/screenshots/01-概览.png)<br>**概览** · 指标 + 实时日志 | ![插件](docs/screenshots/02-插件.png)<br>**插件** · 已安装 / 市场 |
-| ![知识库](docs/screenshots/03-知识库.png)<br>**知识库** · 分文件夹、按群隔离 | ![长期记忆](docs/screenshots/04-长期记忆.png)<br>**长期记忆** · 按群/按人，能手动改 |
-| ![表情库](docs/screenshots/05-表情库.png)<br>**表情库** · 自动打标，按情绪挑 | ![系统配置](docs/screenshots/06-系统配置.png)<br>**系统配置** · 改完即时生效 |
+| ![概览](docs/screenshots/01-概览.webp)<br>**概览** · 指标 + 实时日志 | ![插件](docs/screenshots/02-插件.webp)<br>**插件** · 已安装 / 市场 |
+| ![知识库](docs/screenshots/03-知识库.webp)<br>**知识库** · 分文件夹、按群隔离 | ![长期记忆](docs/screenshots/04-长期记忆.webp)<br>**长期记忆** · 按群/按人，能手动改 |
+| ![表情库](docs/screenshots/05-表情库.webp)<br>**表情库** · 自动打标，按情绪挑 | ![系统配置](docs/screenshots/06-系统配置.webp)<br>**系统配置** · 改完即时生效 |
 
 还有人格设定、AI 对话调试、语音合成、外观（壁纸/毛玻璃/深浅色）、调试（备份还原）八个页面，懒得一张张放。
 

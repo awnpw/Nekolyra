@@ -53,3 +53,6 @@ build_launcher/NekolyraUpdater/
 .m.txt
 *.tmpmsg
 .squash.txt
+
+# PyInstaller 生成的 spec（构建中间产物）
+Nekolyra.spec
