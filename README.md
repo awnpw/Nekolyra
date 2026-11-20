@@ -47,7 +47,7 @@ docker compose up -d
 
 ## 界面
 
-管理台是单页应用，跑在 pywebview 的原生窗口里，跟 OneBot 共用同一个端口。下面都是真截图。
+管理台是单页应用，跑在 pywebview 的原生窗口里，跟 OneBot 共用同一个端口。下面都是截图。
 
 | | |
 |---|---|
