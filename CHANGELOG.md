@@ -19,6 +19,7 @@
 
 `1.0.6.0 → 1.0.6.1`，只动最后一位。无新功能、无配置项变更。
 
+[v1.0.6.1]正常，其余都是异常版本，可能导致无法正常安装。不建议部署，也可通过config.json绕过安装
 `run_setup_wizard()` 的 url 分支有意不带 `js_api`（避开 pywebview 6.2.1 + WebView2 的
 `get_ZoomFactor` 异常），但 `SETUP_HTML` 的 `submit()` 第一行强依赖
 `window.pywebview.api.save`，没有就直接 `return` 报「界面还没准备好」；
