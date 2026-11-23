@@ -2307,7 +2307,7 @@ async function loadConfig(){
     {title:"长期记忆",fields:[["memory_check_every","分析频率（每N轮）","number"],["memory_min_importance","最低重要度 1-5","number"],["memory_inject_count","注入群记忆条数","number"],["memory_user_enabled","记住每个人的事","bool"],["memory_user_inject_count","注入个人记忆条数","number"],["chatlog_enabled","记录聊天记录","bool"],["chatlog_keep_days","聊天记录保留天数","number"],
         ["chat_log_keep_days","聊天记录保留天数（清理用）","number"],
         ["log_all_group_msgs","每条群消息都记进聊天记录","bool"]]},
-    {title:"入群与验证",fields:[["verify_enabled","开启入群验证","bool"],["verify_timeout","验证超时（秒）","number"],["min_qq_level","最低 QQ 等级","number"]]},
+    {title:"入群与验证",fields:[["verify_enabled","开启入群验证","bool"],["verify_timeout","验证超时（秒）","number"],["min_qq_level","最低 QQ 等级","number"],["notify_admin_on_request","申请/被邀请时私聊通知超管","bool"]]},
     {title:"欢迎与拒绝",fields:[["welcome_msg","入群欢迎语","text"],["farewell_msg","退群提示语","text"],["reject_msg","拒绝入群理由","text"]]},
     {title:"备份",fields:[["backup_enabled","自动备份开关","bool"],["backup_hour","备份时间（0-23 点）","number"],["backup_keep_days","保留天数","number"]]},
     {title:"插件",fields:[["plugin_timeout","单个插件超时（秒，0=不限）","number"]]},

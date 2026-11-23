@@ -423,7 +423,7 @@ EDITABLE_KEYS = {
     "memory_min_importance", "memory_inject_count", "min_qq_level",
     "memory_user_enabled", "memory_user_inject_count",
     "chatlog_enabled", "chatlog_keep_days",
-    "verify_enabled", "verify_timeout",
+    "verify_enabled", "verify_timeout", "notify_admin_on_request",
     "welcome_msg", "farewell_msg", "reject_msg", "admin_token",
     "persona_name", "persona_identity", "persona_behavior", "persona_speech",
     "talk_value", "reply_to_name", "split_reply", "split_max_length",
@@ -6575,6 +6575,29 @@ group_request = on_request(priority=5, block=False)
 
 @group_request.handle()
 async def _on_request(bot: Bot, event: GroupRequestEvent):
+    if event.sub_type == "invite":
+        # 机器人被邀请进群：不自动同意，只通知超管（受 notify_admin_on_request 控制）
+        if not cfg_bool("notify_admin_on_request", True):
+            return
+        gid = event.group_id
+        uid = event.user_id
+        comment = (event.comment or "").strip()
+        log("req", "邀请", f"QQ {uid} 邀请机器人进群 {gid}")
+        msg = (
+            f"🤝 机器人被邀请入群\n"
+            f"────────────\n"
+            f"群号：{gid}\n"
+            f"邀请人：{uid}\n"
+            f"验证信息：{comment or '（无）'}\n"
+            f"────────────\n"
+            f"需要你手动同意，机器人不会自动进群"
+        )
+        for admin in SUPERUSERS:
+            try:
+                await bot.send_private_msg(user_id=int(admin), message=msg)
+            except Exception as e:
+                log("warn", "静默", "_on_request 吞掉异常：%s: %s" % (type(e).__name__, e))
+        return
     if event.sub_type != "add":
         return
     uid = event.user_id
@@ -6652,6 +6675,9 @@ async def _on_request(bot: Bot, event: GroupRequestEvent):
         f"────────────\n"
         f"打开管理界面「入群管理」页可以一键通过/拒绝"
     )
+    if not cfg_bool("notify_admin_on_request", True):
+        log("info", "申请", "已关闭超管通知（notify_admin_on_request=false）")
+        return
     for admin in SUPERUSERS:
         try:
             await bot.send_private_msg(user_id=int(admin), message=msg)
