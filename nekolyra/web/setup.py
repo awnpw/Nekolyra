@@ -199,11 +199,8 @@ async function submit(){
   const btn = document.getElementById('btn');
 
   err.style.display = 'none';
-  if (!(window.pywebview && window.pywebview.api && window.pywebview.api.save)){
-    err.textContent = '界面还没准备好（pywebview 桥接未就绪）。\n等一两秒再点一次；还是一样就把 startup.log 发我。';
-    err.style.display = 'block';
-    return;
-  }
+  // url 模式下窗口没有 js_api（见 run_setup_wizard 里的注释），不能在这里拦；
+  // 有没有桥只决定用哪种提交方式，下面统一有 fetch('/save') 本地兜底。
   const problems = [];
   if (!qq) problems.push('· 管理员 QQ 号没填');
   else if (!/^\d{5,12}$/.test(qq)) problems.push('· 管理员 QQ 号应该是 5-12 位数字');
@@ -249,21 +246,15 @@ async function submit(){
 let _bridgeReady = false;
 function _syncBtn(){
   const b = document.getElementById('btn');
-  if (b) b.disabled = !_bridgeReady;
+  // 按钮可用性不能挂在 pywebview 桥上：url 模式下本来就没有 js_api，
+  // 提交会走本地 HTTP 兜底，按钮必须始终可点。
+  if (b) b.disabled = false;
 }
 document.addEventListener('pywebviewready', function(){ _bridgeReady = true; _syncBtn(); });
 if (window.pywebview && window.pywebview.api) { _bridgeReady = true; }
 _syncBtn();
-setTimeout(function(){
-  if (_bridgeReady) return;
-  const e = document.getElementById('err');
-  if (e){
-    e.textContent = '界面桥接还没起来。可以关掉窗口重开一次；'
-                  + '如果一直这样，把安装目录里的 startup.log 发我。';
-    e.style.display = 'block';
-  }
-  _syncBtn();
-}, 6000);
+// 注意：这里不再做“桥接还没起来”的提示。url 模式没有桥是正常的，
+// 真正失败会在 submit() 的 fetch 里把错误显示出来。
 
 document.addEventListener('keydown', e => {
   if (e.key === 'Enter' && e.target.tagName === 'INPUT') submit();
