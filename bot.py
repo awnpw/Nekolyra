@@ -104,6 +104,35 @@ def get_base_dir():
 
 BASE_DIR = get_base_dir()
 
+
+def clear_net_mark(root):
+    """清掉自身目录下文件的 Windows「来自网络」标记（Zone.Identifier）。
+
+    从 GitHub 下载 zip 解压后，每个文件都带这个备用数据流。.NET Framework 的
+    Assembly.LoadFrom 会拒绝加载带标记的 DLL（HRESULT 0x80131515），pywebview
+    因此起不来、只能退回浏览器。启动时自己清掉，用户不用再右键「解除锁定」。
+
+    只删 ADS，不碰文件内容；没有标记时 os.remove 抛 FileNotFoundError，忽略。
+    """
+    if not sys.platform.startswith("win"):
+        return 0
+    n = 0
+    for dirpath, _dirnames, filenames in os.walk(root):
+        for name in filenames:
+            try:
+                os.remove(os.path.join(dirpath, name) + ":Zone.Identifier")
+                n += 1
+            except OSError:
+                pass
+    return n
+
+
+_UNBLOCKED = 0
+try:
+    _UNBLOCKED = clear_net_mark(BASE_DIR)
+except Exception:
+    _UNBLOCKED = 0
+
 # ---- 注册向导模式：必须在下面的配置校验之前判断 ----
 # 配置不完整时，桌面版要弹注册向导，而不是提前 sys.exit。
 # 这个标记必须在这里设置：文件下方的配置校验（第 155 行附近）会先执行。
@@ -142,6 +171,14 @@ try:
     _logf = open(LOG_PATH, "w", encoding="utf-8")
 except Exception:
     _logf = None
+
+if _UNBLOCKED and _logf is not None:
+    try:
+        _logf.write(f"[{datetime.now().strftime('%m-%d %H:%M:%S')}] "
+                    f"已清除 {_UNBLOCKED} 个文件的「来自网络」标记（Zone.Identifier）\n")
+        _logf.flush()
+    except Exception:
+        pass
 
 
 def log_startup(msg):
