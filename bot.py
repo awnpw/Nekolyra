@@ -9315,6 +9315,9 @@ def main():
         log_startup(f"窗口启动失败: {type(e).__name__}: {e}")
         import webbrowser
         webbrowser.open(url)
+        # create_window 成功但 start 失败时 window 不是 None；不置空会跳过下面的常驻分支，
+        # 直接 shutdown 退出 —— 浏览器拉开时 8080 已经没了（ERR_CONNECTION_REFUSED）。
+        window = None
 
     print(f"\n  管理界面已就绪：{url}\n  （关闭本窗口即退出程序）\n", flush=True)
     # 能走到这里说明窗口没起来（走的是浏览器模式），进程要常驻 —— 这是正常的
