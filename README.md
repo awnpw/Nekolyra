@@ -7,7 +7,7 @@
 ![Python](https://img.shields.io/badge/Python-3.12%2B-3776ab?logo=python&logoColor=white)
 [![License](https://img.shields.io/badge/License-GPL--3.0-blue)](LICENSE)
 ![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20Linux%20%7C%20Docker-6b7280)
-[![Version](https://img.shields.io/badge/version-1.0.7.2-2ea44f)](VERSION)
+[![Version](https://img.shields.io/badge/version-1.0.7.0-2ea44f)](VERSION)
 
 做这个不是为了"再写一个能接 API 的机器人"。我只想要一个在群里说话不像客服的东西 ——
 所以花时间最多的是提示词、人格和它的记忆，而不是插件数量。现在它有 12 个自带插件，

@@ -15,44 +15,7 @@
 > 重写的原因是早期历史里混进了本机开发脚本与未脱敏的界面截图。
 > 这一点写在这里而不是悄悄抹掉：开源项目该说清楚。
 
-### 🧹 1.0.7.2 — 启动时自己清掉「来自网络」标记，不用再右键解锁
-
-`1.0.7.1 → 1.0.7.2`，只动最后一位。
-
-从 GitHub 下载 zip 解压后，每个文件都带 Windows 的 `Zone.Identifier` 备用数据流。
-.NET Framework 的 `Assembly.LoadFrom` 会拒绝加载带这个标记的 DLL（`0x80131515`），
-pywebview 因此起不来、程序退回浏览器。
-
-以前没这问题，是因为 pythonnet 3.x 改成了跨 AppDomain `LoadFrom` 加载 `Python.Runtime.dll`；
-旧版 2.x 用 `clr.pyd` 直接嵌进程，不走这条路径，所以早期版本不解锁也能跑。
-
-从这版开始，启动时先把自身目录下所有文件的 `Zone.Identifier` 删掉（只删 ADS，不改文件内容）。
-日志会写一行「已清除 N 个文件的「来自网络」标记」。用户不用再右键属性 → 解除锁定。
-
-验证：给构建产物里的 `Python.Runtime.dll` 人为加上 `Zone.Identifier`，启动后窗口正常、
-日志记录清除数量；单独对 `clear_net_mark()` 做单测，两个带标记文件全部清掉。
-
----
-
-### 🔧 1.0.7.1 — 窗口起不来时程序直接退出，浏览器打开就是拒绝连接
-
-`1.0.7.0 → 1.0.7.1`，只动最后一位。
-
-`main()` 里 `create_window()` 成功、`webview.start()` 抛异常时，`window` 不是 `None`，
-于是跳过「窗口没起来就常驻」的分支，直接 `shutdown()` + `os._exit(0)`。
-
-表现：日志先写「窗口启动失败」，浏览器打开 `127.0.0.1:8080`，然后 `ERR_CONNECTION_REFUSED` ——
-服务已经退出了。
-
-修法：在这个 `except` 分支里把 `window = None`，让失败路径也走常驻分支。
-
-最常见的触发条件是解压后文件带 Windows「来自网络」标记，.NET 拒绝加载
-`Python.Runtime.dll`（`0x80131515`）。那个不是代码能修的；这版保证的是：
-**窗口失败后服务还在，浏览器能进管理界面**。
-
----
-
-### ✨ 1.0.7.0 — 入群申请通知：开关真能关了，邀请也能收到
+### ✨ 1.0.7.0 — 入群申请通知 + 两个修补
 
 `1.0.6.1 → 1.0.7.0`，加功能，动第三位。
 
@@ -74,6 +37,32 @@ pywebview 因此起不来、程序退回浏览器。
 
 验证：`py_compile bot.py` 通过；构建产物里核对 `EDITABLE_KEYS` 含该键、`admin.js` 的
 「入群与验证」schema 里有这个开关。
+
+#### 同版本修补：启动时自动清除「来自网络」标记
+
+从 GitHub 下载 zip 解压后，每个文件都带 Windows 的 `Zone.Identifier` 备用数据流。
+.NET Framework 的 `Assembly.LoadFrom` 会拒绝加载带这个标记的 DLL（`0x80131515`），
+pywebview 因此起不来、程序退回浏览器。
+
+以前没这问题，是因为 pythonnet 3.x 改成了跨 AppDomain `LoadFrom` 加载 `Python.Runtime.dll`；
+旧版 2.x 用 `clr.pyd` 直接嵌进程，不走这条路径，所以早期版本不解锁也能跑。
+
+现在启动时先把自身目录下所有文件的 `Zone.Identifier` 删掉（只删 ADS，不改文件内容）。
+日志会写一行「已清除 N 个文件的「来自网络」标记」。用户不用再右键属性 → 解除锁定。
+
+验证：给构建产物里的 `Python.Runtime.dll` 人为加上 `Zone.Identifier`，启动后窗口正常、
+日志记录清除数量；单独对 `clear_net_mark()` 做单测，两个带标记文件全部清掉。
+
+#### 同版本修补：窗口 start 失败时不再直接退出
+
+`main()` 里 `create_window()` 成功、`webview.start()` 抛异常时，`window` 不是 `None`，
+于是跳过「窗口没起来就常驻」的分支，直接 `shutdown()` + `os._exit(0)`。
+
+表现：日志先写「窗口启动失败」，浏览器打开 `127.0.0.1:8080`，然后 `ERR_CONNECTION_REFUSED` ——
+服务已经退出了。
+
+修法：在这个 `except` 分支里把 `window = None`，让失败路径也走常驻分支。
+窗口起不来时服务继续跑，浏览器能进管理界面。
 
 ---
 
